@@ -26,7 +26,7 @@ function HomePage() {
     <div className="mx-auto flex max-w-2xl flex-col gap-4 p-4">
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Stagehand</h1>
-        <Button variant="outline" size="sm" onClick={logout}>
+        <Button variant="quiet" size="sm" onClick={logout}>
           Sign out
         </Button>
       </header>
@@ -41,10 +41,10 @@ function HomePage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
-          <Badge variant={health.isSuccess ? 'default' : 'destructive'}>
+          <Badge variant={health.isSuccess ? 'live' : health.isError ? 'destructive' : 'idle'}>
             API: {health.isSuccess ? `v${health.data.version}` : health.isError ? 'down' : '…'}
           </Badge>
-          <Badge variant={socket.status === 'open' ? 'default' : 'secondary'}>
+          <Badge variant={socket.status === 'open' ? 'live' : 'idle'}>
             WebSocket: {socket.status}
           </Badge>
         </CardContent>

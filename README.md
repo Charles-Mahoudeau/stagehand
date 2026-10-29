@@ -46,6 +46,45 @@ Define it with `createRoute()` in `apps/server/src/routes/`, build the router
 with `createRouter()`, and chain it into `routes` in `src/app.ts`. It is then
 validated, documented in `/docs`, and typed in the web client (`@/lib/api`).
 
+## Design system
+
+The UI follows the Stagehand design system:
+https://claude.ai/artifact/DMvZVU2KumqUdhtsGUCAiN (tokens, guidelines and live
+component previews). The rules that matter most:
+
+- **Black only.** There is no light theme. `index.html` sets `class="dark"`
+  so shadcn's `dark:` variants apply.
+- **Light is the only colour.** Hue on screen means DMX output (fixture dots,
+  group tiles, cue strips). Chrome stays black, grey and white. The exceptions
+  are the state colours `live`, `warning` and `destructive` (dots and pills
+  only) and the fader tints `ch-red`, `ch-green`, `ch-blue` and `ch-white`.
+- **White is the selection.** The active tab, the primary button and the
+  selected fixture (`shadow-select`) use it. There is no brand accent.
+- **Numbers are mono.** DMX values, addresses, BPM and fixture ids use
+  `font-mono` (JetBrains Mono). Everything else uses Instrument Sans. Both are
+  bundled through Fontsource, so the UI works on a LAN with no internet.
+- **Rounded, filled, borderless.** Panels are `bg-card` (`surface-1`) with
+  `rounded-2xl` on black. Insets inside them are `surface-2`, and the selected
+  row is `surface-3`.
+- **Touch-sized.** `h-control-sm` (40px) is the minimum target,
+  `h-control-md` (44px) the default, `h-control-lg` (48px) for show controls
+  and `h-control-go` (96px) for Go.
+
+Tokens live in `apps/web/src/index.css`. The shadcn variables are mapped onto
+them, and the extra ones are exposed as Tailwind colours: `surface-0` to
+`surface-3`, `border-subtle`, `off-ring`, `live`, `warning` and `ch-*`. The
+shadcn components in `src/components/ui/` are restyled to match:
+
+| Component | Variants |
+| --- | --- |
+| `Button` | `secondary` (default), `default` (white, at most once per region), `quiet`, `outline` (Blackout), `dashed` (Add …), `ghost`, `destructive`, `link`. Sizes: `default` 44px, `sm` 40px, `lg` 48px, `go` 96px full width, `icon*` |
+| `Badge` | Status pill: `live`, `warning`, `destructive`, `idle` show a dot; also `default`, `outline` |
+| `Card` | Panel: `surface-1`, 16px radius, no border |
+| `Input` | Filled `surface-2`, 44px, white focus outline |
+
+When adding a shadcn component, restyle it with these tokens before using it.
+Use lucide icons at 16px or 20px, outline only.
+
 ## Database
 
 Edit `apps/server/src/db/schema.ts`, then run `pnpm db:generate`. Migrations

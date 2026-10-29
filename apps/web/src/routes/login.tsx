@@ -56,7 +56,7 @@ function LoginPage() {
               />
               {login.isError && <p className="text-sm text-destructive">{login.error.message}</p>}
             </div>
-            <Button type="submit" disabled={login.isPending || !token}>
+            <Button type="submit" variant="default" disabled={login.isPending || !token}>
               Sign in
             </Button>
           </form>
