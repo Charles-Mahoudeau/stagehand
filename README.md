@@ -75,12 +75,12 @@ them, and the extra ones are exposed as Tailwind colours: `surface-0` to
 `surface-3`, `border-subtle`, `off-ring`, `live`, `warning` and `ch-*`. The
 shadcn components in `src/components/ui/` are restyled to match:
 
-| Component | Variants |
-| --- | --- |
-| `Button` | `secondary` (default), `default` (white, at most once per region), `quiet`, `outline` (Blackout), `dashed` (Add …), `ghost`, `destructive`, `link`. Sizes: `default` 44px, `sm` 40px, `lg` 48px, `go` 96px full width, `icon*` |
-| `Badge` | Status pill: `live`, `warning`, `destructive`, `idle` show a dot; also `default`, `outline` |
-| `Card` | Panel: `surface-1`, 16px radius, no border |
-| `Input` | Filled `surface-2`, 44px, white focus outline |
+| Component | Variants                                                                                                                                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Button`  | `secondary` (default), `default` (white, at most once per region), `quiet`, `outline` (Blackout), `dashed` (Add …), `ghost`, `destructive`, `link`. Sizes: `default` 44px, `sm` 40px, `lg` 48px, `go` 96px full width, `icon*` |
+| `Badge`   | Status pill: `live`, `warning`, `destructive`, `idle` show a dot; also `default`, `outline`                                                                                                                                    |
+| `Card`    | Panel: `surface-1`, 16px radius, no border                                                                                                                                                                                     |
+| `Input`   | Filled `surface-2`, 44px, white focus outline                                                                                                                                                                                  |
 
 When adding a shadcn component, restyle it with these tokens before using it.
 Use lucide icons at 16px or 20px, outline only.

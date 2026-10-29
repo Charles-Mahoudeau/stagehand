@@ -1,9 +1,9 @@
 # Wakanda room
 
-Demo room. Original plan: [plan.png](plan.png) (legend in French: *Canal* =
-channel, *rien* = nothing connected, *mobile* = movable fixture).
+Demo room. Original plan: [plan.png](plan.png) (legend in French: _Canal_ =
+channel, _rien_ = nothing connected, _mobile_ = movable fixture).
 
-A "canal" is not a single DMX channel but a 16-channel slot: canal *n* starts
+A "canal" is not a single DMX channel but a 16-channel slot: canal _n_ starts
 at DMX address 16·(n−1)+1 (1-based, as in `dmx.set()`), and its fixture
 profile (see [DMX fixture profiles](#dmx-fixture-profiles)) occupies the first
 channels of the slot. Every fixture on a canal shares that address, so they are
@@ -15,7 +15,7 @@ canals 4 and 10) to 255 lit both side walls blue and nothing else.
 ## Canals
 
 | Canal | DMX address | Profile     | Colour on plan | Fixtures | Where                                 |
-|------:|------------:|-------------|----------------|---------:|---------------------------------------|
+| ----: | ----------: | ----------- | -------------- | -------: | ------------------------------------- |
 |     1 |           1 | fixed RGBW  | red            |        2 | back row (row A), two centre spots    |
 |     2 |          17 | fixed RGBW  | yellow         |        2 | second row (row B), two centre spots  |
 |     3 |          33 | —           | —              |        0 | unused                                |
@@ -63,7 +63,7 @@ Fixture centres as fractions of the room's width (x, 0 = left wall) and depth
 chases); approximate, not surveyed.
 
 | Canal | Fixture                 | x    | y    |
-|------:|-------------------------|------|------|
+| ----: | ----------------------- | ---- | ---- |
 |     7 | A1 (top-left corner)    | 0.10 | 0.06 |
 |     1 | A2                      | 0.36 | 0.06 |
 |     1 | A3                      | 0.62 | 0.06 |
@@ -98,7 +98,7 @@ first channel).
 ### Fixed projectors (4-channel mode)
 
 | Offset | Function | Range |
-|-------:|----------|-------|
+| -----: | -------- | ----- |
 |     +0 | Red      | 0–255 |
 |     +1 | Green    | 0–255 |
 |     +2 | Blue     | 0–255 |
@@ -107,7 +107,7 @@ first channel).
 ### Moving heads (2×, Spot Gobo, 11-channel mode)
 
 | Offset | Function          | Notes                                                       |
-|-------:|-------------------|-------------------------------------------------------------|
+| -----: | ----------------- | ----------------------------------------------------------- |
 |     +0 | Pan               | Horizontal, 0°–540°                                         |
 |     +1 | Pan Fine          | 16-bit precision for very accurate targeting                |
 |     +2 | Tilt              | Vertical, 0°–270°                                           |
