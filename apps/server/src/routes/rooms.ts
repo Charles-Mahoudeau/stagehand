@@ -3,6 +3,7 @@ import { and, eq, ne, sql } from 'drizzle-orm'
 import { db } from '../db'
 import { rooms } from '../db/schema'
 import { dmxOutput } from '../dmx'
+import { identify } from '../identify'
 import { createRouter } from '../lib/router'
 import { errorResponse, jsonResponse as json } from '../lib/schemas'
 import { broadcast } from '../ws'
@@ -151,6 +152,7 @@ export const roomRoutes = createRouter()
       tx.update(rooms).set({ active: false }).where(eq(rooms.active, true)).run()
       return tx.update(rooms).set({ active: true }).where(eq(rooms.id, roomId)).returning().get()
     })
+    identify.stop({ restore: false })
     dmxOutput.blackout()
     broadcast({ type: 'rooms.changed' })
     return c.json(room, 200)

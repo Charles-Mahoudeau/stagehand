@@ -4,9 +4,11 @@ import { app } from './app'
 import { runMigrations, sqlite } from './db'
 import { dmxOutput } from './dmx'
 import { env } from './env'
+import { startDmxBroadcast } from './ws'
 
 runMigrations()
 dmxOutput.start()
+const dmxBroadcast = startDmxBroadcast()
 
 const server = serve(
   {
@@ -22,6 +24,7 @@ const server = serve(
 )
 
 async function shutdown() {
+  clearInterval(dmxBroadcast)
   await dmxOutput.stop()
   server.close(() => {
     sqlite.close()

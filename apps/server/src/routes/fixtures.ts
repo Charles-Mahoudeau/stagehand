@@ -4,6 +4,7 @@ import { and, eq, ne, sql } from 'drizzle-orm'
 import { db } from '../db'
 import { fixtures } from '../db/schema'
 import { DMX_CHANNELS, dmxOutput } from '../dmx'
+import { identify } from '../identify'
 import { createRouter } from '../lib/router'
 import { errorResponse, jsonResponse as json } from '../lib/schemas'
 import { broadcast } from '../ws'
@@ -151,6 +152,32 @@ const removeFixture = createRoute({
   responses: { 204: { description: 'Fixture removed' }, 404: errorResponse('No such fixture') },
 })
 
+const startIdentify = createRoute({
+  method: 'post',
+  path: '/rooms/{roomId}/fixtures/{fixtureId}/identify',
+  tags: ['Fixtures'],
+  summary: 'Start the identify rainbow on a fixture',
+  description:
+    'Cycles colours on the fixture’s channels (and so on every fixture sharing its address) ' +
+    'until stopped. Only one fixture identifies at a time; starting another stops the first.',
+  request: { params: FixtureParams },
+  responses: {
+    204: { description: 'Identifying' },
+    404: errorResponse('No such fixture'),
+    409: errorResponse('The room is not the active one'),
+  },
+})
+
+const stopIdentify = createRoute({
+  method: 'delete',
+  path: '/rooms/{roomId}/fixtures/{fixtureId}/identify',
+  tags: ['Fixtures'],
+  summary: 'Stop the identify rainbow',
+  description: 'The channels go back to their values from before. No-op if not identifying.',
+  request: { params: FixtureParams },
+  responses: { 204: { description: 'Stopped' } },
+})
+
 type FixtureRow = typeof fixtures.$inferSelect
 
 function fitsUniverse(type: FixtureType, address: number) {
@@ -249,6 +276,7 @@ export const fixtureRoutes = createRouter()
     const changes = { ...input, ...coords }
     // Drizzle rejects an empty SET, so an empty body is a no-op.
     if (Object.keys(changes).length === 0) return c.json(toFixture(old), 200)
+    identify.stopFor(fixtureId)
     const row = db.update(fixtures).set(changes).where(eq(fixtures.id, fixtureId)).returning().get()
     if (type !== old.type || address !== old.address) releaseChannels(roomId, old)
     broadcast({ type: 'fixtures.changed', roomId })
@@ -258,8 +286,21 @@ export const fixtureRoutes = createRouter()
     const { roomId, fixtureId } = c.req.valid('param')
     const old = findFixture(roomId, fixtureId)
     if (!old) return c.json({ error: 'Fixture not found' }, 404)
+    identify.stopFor(fixtureId)
     db.delete(fixtures).where(eq(fixtures.id, fixtureId)).run()
     releaseChannels(roomId, old)
     broadcast({ type: 'fixtures.changed', roomId })
+    return c.body(null, 204)
+  })
+  .openapi(startIdentify, (c) => {
+    const { roomId, fixtureId } = c.req.valid('param')
+    const row = findFixture(roomId, fixtureId)
+    if (!row) return c.json({ error: 'Fixture not found' }, 404)
+    if (!findRoom(roomId)?.active) return c.json({ error: 'Activate the room to identify' }, 409)
+    identify.start(row)
+    return c.body(null, 204)
+  })
+  .openapi(stopIdentify, (c) => {
+    identify.stopFor(c.req.valid('param').fixtureId)
     return c.body(null, 204)
   })

@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
 import { sessionQuery } from '@/lib/api'
+import { LiveProvider } from '@/lib/live'
 
 // Layout route: everything under _authed/ requires a valid session.
 export const Route = createFileRoute('/_authed')({
@@ -7,5 +8,9 @@ export const Route = createFileRoute('/_authed')({
     const authenticated = await context.queryClient.ensureQueryData(sessionQuery)
     if (!authenticated) throw redirect({ to: '/login', search: { redirect: location.href } })
   },
-  component: Outlet,
+  component: () => (
+    <LiveProvider>
+      <Outlet />
+    </LiveProvider>
+  ),
 })

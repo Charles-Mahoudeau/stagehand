@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
+import { Route as AuthedConfigureRouteImport } from './routes/_authed/configure'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
@@ -27,27 +28,35 @@ const AuthedIndexRoute = AuthedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedConfigureRoute = AuthedConfigureRouteImport.update({
+  id: '/configure',
+  path: '/configure',
+  getParentRoute: () => AuthedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
   '/login': typeof LoginRoute
+  '/configure': typeof AuthedConfigureRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/configure': typeof AuthedConfigureRoute
   '/': typeof AuthedIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authed': typeof AuthedRouteWithChildren
   '/login': typeof LoginRoute
+  '/_authed/configure': typeof AuthedConfigureRoute
   '/_authed/': typeof AuthedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login'
+  fullPaths: '/' | '/login' | '/configure'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/'
-  id: '__root__' | '/_authed' | '/login' | '/_authed/'
+  to: '/login' | '/configure' | '/'
+  id: '__root__' | '/_authed' | '/login' | '/_authed/configure' | '/_authed/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -78,14 +87,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/configure': {
+      id: '/_authed/configure'
+      path: '/configure'
+      fullPath: '/configure'
+      preLoaderRoute: typeof AuthedConfigureRouteImport
+      parentRoute: typeof AuthedRoute
+    }
   }
 }
 
 interface AuthedRouteChildren {
+  AuthedConfigureRoute: typeof AuthedConfigureRoute
   AuthedIndexRoute: typeof AuthedIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedConfigureRoute: AuthedConfigureRoute,
   AuthedIndexRoute: AuthedIndexRoute,
 }
 
