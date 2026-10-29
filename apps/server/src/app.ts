@@ -9,7 +9,9 @@ import { createRouter } from './lib/router'
 import { webDistDir } from './paths'
 import { auth } from './routes/auth'
 import { dmx } from './routes/dmx'
+import { fixtureRoutes } from './routes/fixtures'
 import { health } from './routes/health'
+import { roomRoutes } from './routes/rooms'
 import { wsHandler } from './ws'
 
 const app = createRouter()
@@ -19,7 +21,12 @@ app.use('/api/*', requireAuth)
 app.use('/ws', requireAuth)
 
 // Chained so `AppType` carries every route for the typed client in apps/web.
-const routes = app.route('/api', health).route('/api', auth).route('/api', dmx)
+const routes = app
+  .route('/api', health)
+  .route('/api', auth)
+  .route('/api', dmx)
+  .route('/api', roomRoutes)
+  .route('/api', fixtureRoutes)
 
 app.get('/ws', wsHandler)
 
