@@ -1,0 +1,24 @@
+{
+  "name": "stagehand",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.14.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "build": "pnpm --filter @stagehand/web build && pnpm --filter @stagehand/server build",
+    "start": "pnpm --filter @stagehand/server start",
+    "typecheck": "pnpm -r typecheck",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "db:generate": "pnpm --filter @stagehand/server db:generate",
+    "db:migrate": "pnpm --filter @stagehand/server db:migrate",
+    "db:studio": "pnpm --filter @stagehand/server db:studio"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.3",
+    "typescript": "^7.0.2"
+  }
+}
