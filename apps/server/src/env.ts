@@ -15,6 +15,10 @@ const Env = z.object({
     .string()
     .default('data/stagehand.db')
     .transform((p) => path.resolve(serverRoot, p)),
+  DMX_PORT: z
+    .string()
+    .optional()
+    .transform((p) => p || undefined),
 })
 
 const parsed = Env.safeParse(process.env)

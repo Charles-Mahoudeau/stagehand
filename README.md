@@ -58,3 +58,13 @@ The DMX interface is a DSD TECH USB→RS485 adapter (FTDI FT232R), at
 `/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_*`. Your user must be in the
 `uucp` group (Arch) or `dialout` (Debian/Ubuntu). RS485 → XLR wiring:
 GND → pin 1, B → pin 2, A → pin 3 (swap A/B if fixtures don't respond).
+
+## DMX output
+
+`src/dmx.ts` drives one 512-channel universe: it sends frames continuously
+(break, start code 0, then all 512 channels at 250 kbaud, 8N2) and reopens the
+adapter whenever it is unplugged. It uses the first FTDI adapter it finds;
+set `DMX_PORT` in `.env` to pin a specific port. `GET /api/dmx` reports
+whether frames are going out, the frame rate and the channel values;
+`PATCH /api/dmx/channels` with `{ "start": 1, "values": [255, 128] }` sets
+channels (numbered 1–512), and `POST /api/dmx/blackout` zeroes them all.

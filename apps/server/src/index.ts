@@ -2,9 +2,11 @@ import { serve } from '@hono/node-server'
 import { WebSocketServer } from 'ws'
 import { app } from './app'
 import { runMigrations, sqlite } from './db'
+import { dmxOutput } from './dmx'
 import { env } from './env'
 
 runMigrations()
+dmxOutput.start()
 
 const server = serve(
   {
@@ -19,7 +21,8 @@ const server = serve(
   },
 )
 
-function shutdown() {
+async function shutdown() {
+  await dmxOutput.stop()
   server.close(() => {
     sqlite.close()
     process.exit(0)
