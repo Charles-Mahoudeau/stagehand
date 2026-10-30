@@ -99,6 +99,13 @@ export function TargetsView({ room, fixtures }: ViewProps) {
   )
 }
 
+// Lower-case letters, digits and single dashes, as the server requires.
+const toSlug = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+
 function nextTargetName(targets: Target[]) {
   const names = new Set(targets.map((t) => t.name.toLowerCase()))
   for (let n = targets.length + 1; ; n++) if (!names.has(`target ${n}`)) return `Target ${n}`
@@ -147,7 +154,20 @@ function TargetEditor({ room, target, heads, head, onSelectHead, onRemoved }: Ed
             </Button>
           )}
         </div>
-        <span className="font-mono text-xs text-muted-foreground">ID {target.slug}</span>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          ID
+          <CommitInput
+            aria-label="Target ID"
+            value={target.slug}
+            onCommit={(text) => {
+              const slug = toSlug(text)
+              if (slug && slug !== target.slug) update.mutate({ id: target.id, slug })
+            }}
+            maxLength={40}
+            spellCheck={false}
+            className="max-w-60 font-mono"
+          />
+        </div>
       </section>
 
       <section className="flex flex-col gap-1 rounded-2xl bg-surface-1 p-2">
