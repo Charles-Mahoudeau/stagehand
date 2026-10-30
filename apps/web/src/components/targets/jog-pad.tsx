@@ -27,7 +27,8 @@ type Props = {
 }
 
 // Moves a head by hand: arrow buttons (hold to repeat), arrow keys, sliders,
-// and a beam toggle. Sends straight over the socket.
+// and a beam toggle. Sends straight over the socket. Up lowers the tilt value:
+// heads hang from the ceiling, so the beam then travels up the way the arrow does.
 export function JogPad({ head, roomActive }: Props) {
   const { dmx, setChannels } = useLive()
   const live = livePanTilt(head, roomActive ? dmx?.channels : null)
@@ -84,7 +85,7 @@ export function JogPad({ head, roomActive }: Props) {
       if (el.closest('input, textarea, select, [contenteditable], [role=slider]')) return
       // Markers on the plan use the arrows to move themselves.
       if (el.closest('[data-plan-marker]')) return
-      const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[
+      const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[
         e.key
       ]
       if (!d) return
@@ -142,7 +143,7 @@ export function JogPad({ head, roomActive }: Props) {
       <div className="flex items-center gap-4">
         <div className="grid flex-none grid-cols-[repeat(3,48px)] grid-rows-[repeat(3,48px)] gap-1">
           <span />
-          {arrow('Tilt up', 0, 1, ChevronUp)}
+          {arrow('Tilt up', 0, -1, ChevronUp)}
           <span />
           {arrow('Pan left', -1, 0, ChevronLeft)}
           <Button
@@ -158,7 +159,7 @@ export function JogPad({ head, roomActive }: Props) {
           </Button>
           {arrow('Pan right', 1, 0, ChevronRight)}
           <span />
-          {arrow('Tilt down', 0, -1, ChevronDown)}
+          {arrow('Tilt down', 0, 1, ChevronDown)}
           <span />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-2.5 font-mono">
