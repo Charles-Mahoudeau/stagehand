@@ -36,7 +36,11 @@ export function RoomMenu({ rooms, room, onSelect }: Props) {
       }}
     >
       <PopoverTrigger asChild>
-        <Button variant="quiet" className="gap-2.5 px-3.5 aria-expanded:bg-surface-3">
+        <Button
+          variant="quiet"
+          size="xs"
+          className="h-7 gap-2 px-2.5 text-[13px] aria-expanded:bg-surface-3"
+        >
           <ActiveDot active={!!room?.active} />
           {room?.name ?? 'No room'}
           <ChevronDown className="text-muted-foreground" />

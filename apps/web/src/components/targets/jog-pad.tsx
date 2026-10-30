@@ -163,9 +163,9 @@ export function JogPad({ head, roomActive }: Props) {
   const arrow = (label: string, pan: number, tilt: number, Icon: typeof ChevronUp) => (
     <Button
       aria-label={label}
-      size="icon-lg"
+      size="icon-xs"
       variant="quiet"
-      className="bg-surface-2 hover:bg-surface-3"
+      className="size-9 bg-surface-2 hover:bg-surface-3"
       disabled={!roomActive}
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId)
@@ -186,13 +186,9 @@ export function JogPad({ head, roomActive }: Props) {
   )
 
   return (
-    <div className="flex flex-col gap-3.5">
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] font-semibold">Jog {head.name}</span>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <div className="grid flex-none grid-cols-[repeat(3,48px)] grid-rows-[repeat(3,48px)] gap-1">
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        <div className="grid flex-none grid-cols-[repeat(3,36px)] grid-rows-[repeat(3,36px)] gap-1">
           <span />
           {arrow('Tilt up', 0, -1, ChevronUp)}
           <span />
@@ -200,9 +196,12 @@ export function JogPad({ head, roomActive }: Props) {
           <Button
             aria-label={beamOn ? 'Beam off' : 'Beam on'}
             aria-pressed={beamOn}
-            size="icon-lg"
+            size="icon-xs"
             variant={beamOn ? 'default' : 'quiet'}
-            className={cn(!beamOn && 'bg-surface-2 text-muted-foreground hover:bg-surface-3')}
+            className={cn(
+              'size-9',
+              !beamOn && 'bg-surface-2 text-muted-foreground hover:bg-surface-3',
+            )}
             disabled={!roomActive}
             onClick={toggleBeam}
           >
@@ -237,7 +236,7 @@ export function JogPad({ head, roomActive }: Props) {
           onChange={(tilt) => send({ ...current.current, tilt })}
         />
       </div>
-      <span className="text-xs text-muted-foreground">
+      <span className="text-[11px] text-muted-foreground">
         {roomActive
           ? 'Hold an arrow key to speed up · Shift to go slow · tap to nudge'
           : 'Make this room active to move the head'}
@@ -250,7 +249,7 @@ function Readout({ label, degrees, value }: { label: string; degrees: number; va
   return (
     <div className="flex flex-col gap-0.5">
       <span className="font-sans text-xs text-muted-foreground">{label}</span>
-      <span className="text-lg">{degrees.toFixed(1)}°</span>
+      <span className="text-base">{degrees.toFixed(1)}°</span>
       <span className="text-[11px] text-muted-foreground">
         {value} / {MAX_16}
       </span>
@@ -280,7 +279,7 @@ function Slider(props: {
         value={props.value}
         disabled={props.disabled}
         onChange={(e) => props.onChange(Number(e.target.value))}
-        className="fader"
+        className="fader fader-sm"
         style={
           {
             '--fill': `${(props.value / MAX_16) * 100}%`,

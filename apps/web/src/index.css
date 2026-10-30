@@ -139,6 +139,10 @@
   body {
     @apply bg-background text-foreground;
   }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
   html {
     @apply font-sans;
   }
@@ -161,6 +165,16 @@
       0 0 / var(--fill) 100% no-repeat,
       var(--surface-2);
     cursor: pointer;
+  }
+  .fader-sm {
+    height: 20px;
+    border-radius: var(--radius-sm);
+  }
+  .fader-sm::-webkit-slider-thumb {
+    height: 12px;
+  }
+  .fader-sm::-moz-range-thumb {
+    height: 12px;
   }
   .fader:disabled {
     cursor: not-allowed;

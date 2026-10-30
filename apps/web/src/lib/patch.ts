@@ -49,6 +49,12 @@ export function findOverlaps(fixtures: Fixture[]): Overlap[] {
   return overlaps
 }
 
+export function describeOverlap(o: Overlap) {
+  const [a, b] = o.fixtures
+  const [from, to] = o.channels
+  return `${a?.name} and ${b?.name} overlap on ${from === to ? `channel ${from}` : `channels ${from}–${to}`}`
+}
+
 export function overlappingIds(overlaps: Overlap[]) {
   return new Set(overlaps.flatMap((o) => o.fixtures.map((f) => f.id)))
 }

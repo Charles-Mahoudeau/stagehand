@@ -66,21 +66,30 @@ component previews). The rules that matter most:
 - **Rounded, filled, borderless.** Panels are `bg-card` (`surface-1`) with
   `rounded-2xl` on black. Insets inside them are `surface-2`, and the selected
   row is `surface-3`.
-- **Touch-sized.** `h-control-sm` (40px) is the minimum target,
-  `h-control-md` (44px) the default, `h-control-lg` (48px) for show controls
-  and `h-control-go` (96px) for Go.
+- **A fixed workspace.** The window never scrolls. `AppShell` is the frame
+  (40px top bar, work area, 24px status bar) and the work area holds panels
+  (`components/shell/panel.tsx`): a 32px header over a body that scrolls on its
+  own. Panels are `rounded-[8px]` with 4px gaps and a fixed size, no
+  resizing. Configure uses the Console layout: list, plan above a
+  Universe / Patch sheet / Problems dock, inspector.
+- **Dense in Configure, touch-sized in Perform.** Editor panels use the `xs`
+  button (28px), `compact` inputs and `compact` faders, with 26–28px rows and
+  12px text. Perform passes `density="touch"` to `AppShell` and keeps
+  `h-control-sm` (40px) as the minimum target, `h-control-md` (44px) as the
+  default, `h-control-lg` (48px) for show controls and `h-control-go` (96px)
+  for Go.
 
 Tokens live in `apps/web/src/index.css`. The shadcn variables are mapped onto
 them, and the extra ones are exposed as Tailwind colors: `surface-0` to
 `surface-3`, `border-subtle`, `off-ring`, `live`, `warning` and `ch-*`. The
 shadcn components in `src/components/ui/` are restyled to match:
 
-| Component | Variants                                                                                                                                                                                                                       |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Button`  | `secondary` (default), `default` (white, at most once per region), `quiet`, `outline` (Blackout), `dashed` (Add …), `ghost`, `destructive`, `link`. Sizes: `default` 44px, `sm` 40px, `lg` 48px, `go` 96px full width, `icon*` |
-| `Badge`   | Status pill: `live`, `warning`, `destructive`, `idle` show a dot; also `default`, `outline`                                                                                                                                    |
-| `Card`    | Panel: `surface-1`, 16px radius, no border                                                                                                                                                                                     |
-| `Input`   | Filled `surface-2`, 44px, white focus outline                                                                                                                                                                                  |
+| Component | Variants                                                                                                                                                                                                                                                  |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Button`  | `secondary` (default), `default` (white, at most once per region), `quiet`, `outline` (Blackout), `dashed` (Add …), `ghost`, `destructive`, `link`. Sizes: `xs` 28px (editor panels), `default` 44px, `sm` 40px, `lg` 48px, `go` 96px full width, `icon*` |
+| `Badge`   | Status pill: `live`, `warning`, `destructive`, `idle` show a dot; also `default`, `outline`                                                                                                                                                               |
+| `Card`    | Panel: `surface-1`, 16px radius, no border                                                                                                                                                                                                                |
+| `Input`   | Filled `surface-2`, 44px (`compact` 28px), white focus outline                                                                                                                                                                                            |
 
 When adding a shadcn component, restyle it with these tokens before using it.
 Use lucide icons at 16px or 20px, outline only.
