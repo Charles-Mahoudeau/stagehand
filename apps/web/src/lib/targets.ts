@@ -148,6 +148,8 @@ export function useCalibrationMutations(roomId: number) {
         fixtureId: number
         name: string
         position: PlanPoint
+        pan?: number
+        tilt?: number
       }) => {
         const res = await api.rooms[':roomId'].fixtures[':fixtureId'].calibration.$post({
           param: { roomId: String(roomId), fixtureId: String(fixtureId) },

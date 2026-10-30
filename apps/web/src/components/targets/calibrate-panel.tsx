@@ -22,6 +22,7 @@ import {
   precisionGrid,
   useCalibrationMutations,
 } from '@/lib/targets'
+import { useCalibrationWizard, WizardCard } from './calibration-wizard'
 import { JogPad } from './jog-pad'
 import { NumberField } from './number-field'
 import { BeamLine, CoverageOutline, PlanMarker, PlanSvg, PrecisionMap } from './plan-overlay'
@@ -55,6 +56,7 @@ export function CalibratePanel(props: Props) {
   const [showPrecision, setShowPrecision] = useState(true)
   const fit = calibration?.fit
   const precision = calibration && showPrecision ? precisionGrid(calibration) : null
+  const wizard = useCalibrationWizard(room, head, calibration, points)
 
   const addPoint = () => {
     if (!head || !calibration) return
@@ -68,6 +70,7 @@ export function CalibratePanel(props: Props) {
   // Picking a point sends the head to it: to the saved aim, or else to where
   // the fit says it is, so the beam starts close for fine jogging.
   const selectPoint = (p: CalibrationPoint) => {
+    if (wizard.running) return
     onSelectPoint(p.id)
     if (!head || !room.active) return
     if (p.pan !== null && p.tilt !== null) {
@@ -85,6 +88,17 @@ export function CalibratePanel(props: Props) {
     <div className="flex flex-1 flex-wrap gap-4">
       <aside className="flex flex-1 basis-60 flex-col gap-4 sm:max-w-[280px]">
         <HeadList {...props} />
+        {head && calibration && !wizard.running && (
+          <Button
+            variant="outline"
+            size="lg"
+            disabled={!room.active}
+            onClick={wizard.start}
+            title={room.active ? undefined : 'Make this room active to run the wizard'}
+          >
+            Calibration wizard
+          </Button>
+        )}
         {head && calibration && (
           <div className="flex flex-1 flex-col gap-0.5 rounded-2xl bg-surface-1 p-2">
             <div className="flex items-baseline justify-between px-2.5 pt-2.5 pb-2">
@@ -155,7 +169,11 @@ export function CalibratePanel(props: Props) {
           live={room.active}
           highlight={new Set(head ? [head.id] : [])}
           onFloorClick={
-            calibration?.fit && room.active ? (position) => test.mutate(position) : undefined
+            wizard.running
+              ? wizard.place
+              : calibration?.fit && room.active
+                ? (position) => test.mutate(position)
+                : undefined
           }
           overlay={(toPosition) =>
             head &&
@@ -166,10 +184,28 @@ export function CalibratePanel(props: Props) {
                     <PrecisionMap cells={precision} size={PRECISION_GRID} worst={PRECISION_WORST} />
                   )}
                   <CoverageOutline hull={calibration.hull} />
-                  {point && head.position && (
+                  {!wizard.running && point && head.position && (
                     <BeamLine from={head.position} to={point.position} color={beamColor} />
                   )}
                 </PlanSvg>
+                {wizard.step?.kind === 'probe' && wizard.step.probe.spot && (
+                  <PlanMarker
+                    shape="cross"
+                    label="Aimed here"
+                    position={wizard.step.probe.spot}
+                    pending
+                  />
+                )}
+                {wizard.placed && (
+                  <PlanMarker
+                    shape="cross"
+                    label="Your mark"
+                    position={wizard.placed}
+                    selected
+                    onMove={wizard.place}
+                    toPosition={toPosition}
+                  />
+                )}
                 {calibration.points.map((p) => (
                   <PlanMarker
                     key={p.id}
@@ -179,8 +215,11 @@ export function CalibratePanel(props: Props) {
                     selected={p.id === point?.id}
                     pending={p.pan === null || p.tilt === null}
                     onSelect={() => selectPoint(p)}
-                    onMove={(position) =>
-                      update.mutate({ id: p.id, fixtureId: p.fixtureId, position })
+                    onMove={
+                      wizard.running
+                        ? undefined
+                        : (position) =>
+                            update.mutate({ id: p.id, fixtureId: p.fixtureId, position })
                     }
                     toPosition={toPosition}
                   />
@@ -217,9 +256,11 @@ export function CalibratePanel(props: Props) {
                 ? ''
                 : !calibration.fit
                   ? calibrationIssue(head, calibration)
-                  : room.active
-                    ? `Click the floor to test-aim ${head.name} there`
-                    : 'Make this room active to test-aim'}
+                  : wizard.running
+                    ? 'Click the floor where the beam lands'
+                    : room.active
+                      ? `Click the floor to test-aim ${head.name} there`
+                      : 'Make this room active to test-aim'}
           </span>
         </div>
         {(error || skipped) && (
@@ -227,7 +268,9 @@ export function CalibratePanel(props: Props) {
         )}
       </main>
 
-      {head && calibration ? (
+      {head && calibration && wizard.running ? (
+        <WizardCard head={head} wizard={wizard} />
+      ) : head && calibration ? (
         <PointInspector
           key={point?.id}
           room={room}
