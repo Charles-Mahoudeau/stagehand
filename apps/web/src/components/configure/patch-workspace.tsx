@@ -53,9 +53,12 @@ export function PatchWorkspace(props: Props) {
           <PanelHeader className="pl-0">
             <PanelTab active>Plan</PanelTab>
             <Spacer />
-            <PanelNote>Drag a fixture to move it · arrow keys nudge · Shift for 10×</PanelNote>
+            <PanelNote>
+              Drag fixtures to move · arrows nudge · scroll to zoom · drag background to pan
+            </PanelNote>
           </PanelHeader>
           <StagePlan
+            zoomable
             className="min-h-0 flex-1 rounded-none"
             fixtures={fixtures}
             live={room.active}

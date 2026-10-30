@@ -151,9 +151,10 @@ export function TargetsWorkspace({ room, fixtures, onSelect }: ViewProps) {
           <PanelHeader className="pl-0">
             <PanelTab active>Plan</PanelTab>
             <Spacer />
-            <PanelNote>Click a head to calibrate it</PanelNote>
+            <PanelNote>Click a head to calibrate it · scroll to zoom · drag to pan</PanelNote>
           </PanelHeader>
           <StagePlan
+            zoomable
             className="min-h-0 flex-1 rounded-none"
             fixtures={fixtures}
             live={room.active}
