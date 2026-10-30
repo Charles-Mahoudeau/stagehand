@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PlaybackState } from './scenes'
 
 // Messages sent over the /ws socket. Both sides validate with these schemas.
 
@@ -20,6 +21,12 @@ export const ServerMessage = z.discriminatedUnion('type', [
   }),
   // The fixture whose address is running the identify rainbow, if any.
   z.object({ type: z.literal('identify.changed'), fixtureId: z.number().nullable() }),
+  // Effects, scenes or cues of a room were created, edited or deleted.
+  z.object({ type: z.literal('effects.changed'), roomId: z.number() }),
+  z.object({ type: z.literal('scenes.changed'), roomId: z.number() }),
+  z.object({ type: z.literal('cues.changed'), roomId: z.number() }),
+  // What the cue list is playing; sent on every cue, fade end and overlay change.
+  z.object({ type: z.literal('playback.state'), state: PlaybackState }),
 ])
 export type ServerMessage = z.infer<typeof ServerMessage>
 

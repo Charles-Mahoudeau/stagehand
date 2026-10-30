@@ -1,3 +1,6 @@
 export * from './aim'
+export * from './effects'
+export * from './engine'
 export * from './fixtures'
+export * from './scenes'
 export * from './ws'
