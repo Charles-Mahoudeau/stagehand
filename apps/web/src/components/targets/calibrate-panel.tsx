@@ -12,6 +12,7 @@ import type { Fixture, Room } from '@/lib/rooms'
 import {
   aim,
   type CalibrationPoint,
+  calibrationIssue,
   type HeadCalibration,
   headCalibration,
   livePanTilt,
@@ -97,10 +98,14 @@ export function CalibratePanel(props: Props) {
                         : 'Not set'}
                     </span>
                   </span>
-                  {err !== undefined && (
-                    <span className="font-mono text-[11px] text-muted-foreground">
-                      ±{err.toFixed(1)}°
-                    </span>
+                  {calibration.repeats.has(p.id) ? (
+                    <span className="text-[11px] text-warning">Same aim</span>
+                  ) : (
+                    err !== undefined && (
+                      <span className="font-mono text-[11px] text-muted-foreground">
+                        ±{err.toFixed(1)}°
+                      </span>
+                    )
                   )}
                 </Button>
               )
@@ -165,11 +170,13 @@ export function CalibratePanel(props: Props) {
           <span>
             {!head
               ? ''
-              : !calibration?.fit
-                ? `Save ${MIN_CALIBRATION_POINTS} points, then click the floor to test-aim ${head.name}`
-                : room.active
-                  ? `Click the floor to test-aim ${head.name} there`
-                  : 'Make this room active to test-aim'}
+              : !calibration
+                ? ''
+                : !calibration.fit
+                  ? calibrationIssue(head, calibration)
+                  : room.active
+                    ? `Click the floor to test-aim ${head.name} there`
+                    : 'Make this room active to test-aim'}
           </span>
         </div>
         {(error || skipped) && (
@@ -339,7 +346,11 @@ function PointInspector({
         <div className="flex items-baseline justify-between">
           <span className="text-[13px] font-semibold">Fit</span>
           <span className="font-mono text-xs">
-            {fit ? `±${fit.rms.toFixed(1)}° · ${calibration.saved.length} points` : 'Not yet'}
+            {fit
+              ? `±${fit.rms.toFixed(1)}° · ${calibration.saved.length} points`
+              : calibration.saved.length >= MIN_CALIBRATION_POINTS
+                ? 'Doesn’t fit'
+                : 'Not yet'}
           </span>
         </div>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(0,1fr))] gap-1">
@@ -358,7 +369,7 @@ function PointInspector({
         </div>
         <span className="text-xs leading-normal text-muted-foreground">
           {!fit
-            ? `Save ${MIN_CALIBRATION_POINTS - calibration.saved.length} more ${MIN_CALIBRATION_POINTS - calibration.saved.length === 1 ? 'point' : 'points'} to aim ${head.name}.`
+            ? calibrationIssue(head, calibration)
             : worst && fit.rms >= 0.5
               ? `Worst point ${worst.name}, off by ${Math.max(...fit.errors).toFixed(1)}°. Check it, or add a point near it.`
               : 'Every saved point agrees with the fit.'}
@@ -374,6 +385,7 @@ function PointInspector({
 
 export function fitSummary(c: HeadCalibration) {
   if (c.fit) return `${c.saved.length} points · ±${c.fit.rms.toFixed(1)}°`
+  if (c.saved.length >= MIN_CALIBRATION_POINTS) return `${c.saved.length} points · doesn’t fit`
   if (c.saved.length) return `${c.saved.length} of ${MIN_CALIBRATION_POINTS} points`
   return 'Not calibrated'
 }

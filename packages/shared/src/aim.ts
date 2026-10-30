@@ -223,11 +223,38 @@ function solveLinear(M: number[][], b: number[]): number[] | null {
   return x
 }
 
+// Two saved points closer than this in both pan and tilt (degrees), but
+// apart on the plan, mean the head wasn't jogged between them.
+const SAME_AIM_DEGREES = 0.5
+const SAME_SPOT = 0.02
+
+// For each sample, the index of an earlier sample saved with the same aim at
+// a different spot, or null. Any repeat makes the fit meaningless.
+export function repeatedAims(samples: CalibrationSample[]): (number | null)[] {
+  return samples.map((s, i) => {
+    const j = samples.findIndex(
+      (t, j) =>
+        j < i &&
+        Math.abs(panDegrees(t.pan) - panDegrees(s.pan)) < SAME_AIM_DEGREES &&
+        Math.abs(tiltDegrees(t.tilt) - tiltDegrees(s.tilt)) < SAME_AIM_DEGREES &&
+        Math.hypot(t.x - s.x, t.y - s.y) > SAME_SPOT,
+    )
+    return j === -1 ? null : j
+  })
+}
+
+// A head hanging over or near the room, with sane proportions. Inconsistent
+// samples drive the solver to a head far away, which aims everywhere alike.
+const plausible = (m: HeadModel) =>
+  m.hx > -1 && m.hx < 2 && m.hy > -1 && m.hy < 2 && m.height < 5 && m.aspect > 0.05 && m.aspect < 20
+
 // Fits a head model to its calibration samples. `near` is roughly where the
 // head hangs on the plan (its fixture position), used as a starting guess.
-// Null with fewer than MIN_CALIBRATION_POINTS samples.
+// Null with fewer than MIN_CALIBRATION_POINTS samples, when some repeat an
+// aim (see repeatedAims), or when they don't agree on any head position.
 export function fitHead(samples: CalibrationSample[], near?: PlanPoint | null): HeadFit | null {
   if (samples.length < MIN_CALIBRATION_POINTS) return null
+  if (repeatedAims(samples).some((j) => j !== null)) return null
   const cx = near?.x ?? samples.reduce((a, s) => a + s.x, 0) / samples.length
   const cy = near?.y ?? samples.reduce((a, s) => a + s.y, 0) / samples.length
   const first = samples[0] as CalibrationSample
@@ -249,7 +276,7 @@ export function fitHead(samples: CalibrationSample[], near?: PlanPoint | null): 
       }
     }
   }
-  if (!best) return null
+  if (!best || !plausible(best.model)) return null
   const model = best.model
   model.panOffset = wrap(model.panOffset)
   const errors = samples.map((s) => sampleError(model, s))

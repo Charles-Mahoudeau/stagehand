@@ -4,8 +4,10 @@ import {
   coverage,
   fitHead,
   type HeadFit,
+  MIN_CALIBRATION_POINTS,
   type PanTilt,
   type PlanPoint,
+  repeatedAims,
 } from '@stagehand/shared'
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { InferResponseType } from 'hono/client'
@@ -200,13 +202,15 @@ export async function aim(
 
 export const isHead = (f: Fixture) => f.type === 'moving_head'
 
-// A head's saved calibration points, the fit through them (null under four)
-// and the floor area they cover.
+// A head's saved calibration points, the fit through them (null under four
+// or when they don't fit), the floor area they cover, and saved points that
+// repeat an earlier point's aim (keyed by point id).
 export type HeadCalibration = {
   points: CalibrationPoint[]
   saved: CalibrationPoint[]
   fit: HeadFit | null
   hull: PlanPoint[]
+  repeats: Map<number, CalibrationPoint>
 }
 
 export function headCalibration(head: Fixture, points: CalibrationPoint[]): HeadCalibration {
@@ -217,12 +221,32 @@ export function headCalibration(head: Fixture, points: CalibrationPoint[]): Head
     pan: p.pan as number,
     tilt: p.tilt as number,
   }))
+  const repeats = new Map<number, CalibrationPoint>()
+  repeatedAims(samples).forEach((j, i) => {
+    const point = saved[i]
+    const earlier = j === null ? undefined : saved[j]
+    if (point && earlier) repeats.set(point.id, earlier)
+  })
   return {
     points: own,
     saved,
     fit: fitHead(samples, head.position),
     hull: coverage(saved.map((p) => p.position)),
+    repeats,
   }
+}
+
+// Why a head can't aim yet, in a sentence, or null once it has a fit.
+export function calibrationIssue(head: Fixture, c: HeadCalibration): string | null {
+  if (c.fit) return null
+  const missing = MIN_CALIBRATION_POINTS - c.saved.length
+  if (missing > 0)
+    return `Save ${missing} more ${missing === 1 ? 'point' : 'points'} to aim ${head.name}.`
+  const [[id, earlier] = []] = c.repeats
+  const point = c.saved.find((p) => p.id === id)
+  if (point && earlier)
+    return `${point.name} has the same aim as ${earlier.name}. Jog ${head.name} onto ${point.name} and update it.`
+  return `The saved points don't agree on where ${head.name} hangs. Check each point's aim.`
 }
 
 // A head's pan/tilt as the output has them now (16-bit each).

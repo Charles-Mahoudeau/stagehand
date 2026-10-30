@@ -1,5 +1,11 @@
 import { createRoute, z } from '@hono/zod-openapi'
-import { aimAt, coarseFine, fitHead, type PlanPoint } from '@stagehand/shared'
+import {
+  aimAt,
+  coarseFine,
+  fitHead,
+  MIN_CALIBRATION_POINTS,
+  type PlanPoint,
+} from '@stagehand/shared'
 import { and, eq, inArray, ne, sql } from 'drizzle-orm'
 import { db } from '../db'
 import { fixtures, targetNudges, targets } from '../db/schema'
@@ -273,7 +279,11 @@ function aimHeads(roomId: number, fixtureIds: number[], spot: PlanPoint, targetI
     const near = head.x === null || head.y === null ? null : { x: head.x, y: head.y }
     const fit = fitHead(samples, near)
     if (!fit) {
-      skipped.push({ fixtureId: id, reason: 'Not calibrated' })
+      const reason =
+        samples.length < MIN_CALIBRATION_POINTS
+          ? 'Not calibrated'
+          : 'Calibration doesn’t fit: check its points'
+      skipped.push({ fixtureId: id, reason })
       continue
     }
     const at = (offset: number) => channels[head.address - 1 + offset] ?? 0
