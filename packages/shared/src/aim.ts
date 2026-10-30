@@ -37,6 +37,10 @@ export type HeadModel = {
   // Which way pan and tilt turn.
   panSign: 1 | -1
   tiltSign: 1 | -1
+  // How far the head's base leans off level (degrees, about the plan's x and
+  // y axes): a clamp on a truss is rarely square.
+  leanX: number
+  leanY: number
 }
 
 export type HeadFit = {
@@ -61,14 +65,22 @@ export const coarseFine = (v: number) => [v >> 8, v & 255] as const
 // Wraps an angle to (-180, 180].
 const wrap = (deg: number) => deg - 360 * Math.ceil((deg - 180) / 360)
 
-// Direction from the head to a floor spot: azimuth round the vertical, and
-// angle away from straight down, both in degrees.
+// Direction from the head to a floor spot, in the head's own frame: azimuth
+// round its axis, and angle away from that axis, both in degrees.
 function direction(m: HeadModel, p: PlanPoint) {
   const dx = p.x - m.hx
   const dy = (p.y - m.hy) * m.aspect
+  const dz = -m.height
+  // Undo the base's lean: about x, then about y.
+  const ax = m.leanX / DEG
+  const ay = m.leanY / DEG
+  const y1 = dy * Math.cos(ax) + dz * Math.sin(ax)
+  const z1 = -dy * Math.sin(ax) + dz * Math.cos(ax)
+  const x2 = dx * Math.cos(ay) - z1 * Math.sin(ay)
+  const z2 = dx * Math.sin(ay) + z1 * Math.cos(ay)
   return {
-    azimuth: Math.atan2(dy, dx) * DEG,
-    offVertical: Math.atan2(Math.hypot(dx, dy), m.height) * DEG,
+    azimuth: Math.atan2(y1, x2) * DEG,
+    offVertical: Math.atan2(Math.hypot(x2, y1), -z2) * DEG,
   }
 }
 
@@ -98,8 +110,12 @@ function sampleError(m: HeadModel, s: CalibrationSample) {
   return best
 }
 
+// Degrees of sample error one degree of lean is worth: enough that a level
+// head wins unless the samples clearly say otherwise.
+const LEAN_COST = 0.2
+
 // The residual vector the solver minimises: pan and tilt error per sample,
-// each on the branch that fits it best.
+// each on the branch that fits it best, then the lean.
 function residuals(m: HeadModel, samples: CalibrationSample[]) {
   const out: number[] = []
   for (const s of samples) {
@@ -120,12 +136,13 @@ function residuals(m: HeadModel, samples: CalibrationSample[]) {
     }
     out.push(...best)
   }
+  out.push(m.leanX * LEAN_COST, m.leanY * LEAN_COST)
   return out
 }
 
 // Continuous parameters the solver moves; height and aspect go in as logs so
 // they stay positive.
-type Params = [number, number, number, number, number, number]
+type Params = [number, number, number, number, number, number, number, number]
 
 const toModel = (p: Params, panSign: 1 | -1, tiltSign: 1 | -1): HeadModel => ({
   hx: p[0],
@@ -136,11 +153,13 @@ const toModel = (p: Params, panSign: 1 | -1, tiltSign: 1 | -1): HeadModel => ({
   tiltOffset: p[5],
   panSign,
   tiltSign,
+  leanX: p[6],
+  leanY: p[7],
 })
 
 const sumSquares = (r: number[]) => r.reduce((a, v) => a + v * v, 0)
 
-// Levenberg–Marquardt with a numeric Jacobian. Small problem (6 unknowns), so
+// Levenberg–Marquardt with a numeric Jacobian. Small problem (8 unknowns), so
 // the normal equations are solved directly.
 function solve(start: Params, panSign: 1 | -1, tiltSign: 1 | -1, samples: CalibrationSample[]) {
   let p = [...start] as Params
@@ -246,7 +265,15 @@ export function repeatedAims(samples: CalibrationSample[]): (number | null)[] {
 // A head hanging over or near the room, with sane proportions. Inconsistent
 // samples drive the solver to a head far away, which aims everywhere alike.
 const plausible = (m: HeadModel) =>
-  m.hx > -1 && m.hx < 2 && m.hy > -1 && m.hy < 2 && m.height < 5 && m.aspect > 0.05 && m.aspect < 20
+  m.hx > -1 &&
+  m.hx < 2 &&
+  m.hy > -1 &&
+  m.hy < 2 &&
+  m.height < 5 &&
+  m.aspect > 0.05 &&
+  m.aspect < 20 &&
+  Math.abs(m.leanX) < 30 &&
+  Math.abs(m.leanY) < 30
 
 // Fits a head model to its calibration samples. `near` is roughly where the
 // head hangs on the plan (its fixture position), used as a starting guess.
@@ -265,18 +292,21 @@ export function fitHead(samples: CalibrationSample[], near?: PlanPoint | null): 
       for (const height of [0.2, 0.5, 1]) {
         for (const flip of [0, 180]) {
           // Start with the first sample exactly on target.
-          const guess = toModel([cx, cy, Math.log(height), 0, 0, 0], panSign, tiltSign)
+          const guess = toModel([cx, cy, Math.log(height), 0, 0, 0, 0, 0], panSign, tiltSign)
           const { azimuth, offVertical } = direction(guess, first)
           const panOffset = panDegrees(first.pan) - panSign * azimuth - flip
           const tiltOffset = tiltDegrees(first.tilt) - (flip ? -1 : 1) * tiltSign * offVertical
-          const start: Params = [cx, cy, Math.log(height), 0, panOffset, tiltOffset]
+          const start: Params = [cx, cy, Math.log(height), 0, panOffset, tiltOffset, 0, 0]
           const { params, cost } = solve(start, panSign, tiltSign, samples)
-          if (!best || cost < best.cost) best = { model: toModel(params, panSign, tiltSign), cost }
+          const model = toModel(params, panSign, tiltSign)
+          // A head far off, or miles up, can match samples by pointing nearly
+          // the same way at all of them; it aims nowhere useful.
+          if (plausible(model) && (!best || cost < best.cost)) best = { model, cost }
         }
       }
     }
   }
-  if (!best || !plausible(best.model)) return null
+  if (!best) return null
   const model = best.model
   model.panOffset = wrap(model.panOffset)
   const errors = samples.map((s) => sampleError(model, s))

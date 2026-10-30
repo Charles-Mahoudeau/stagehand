@@ -230,10 +230,22 @@ export function headCalibration(head: Fixture, points: CalibrationPoint[]): Head
   return {
     points: own,
     saved,
-    fit: fitHead(samples, head.position),
+    fit: cachedFit(samples, head.position),
     hull: coverage(saved.map((p) => p.position)),
     repeats,
   }
+}
+
+// Fits are slow-ish (tens of ms) and pages re-render with every DMX frame, so
+// keep the last few by their inputs.
+const fits = new Map<string, HeadFit | null>()
+function cachedFit(samples: CalibrationSample[], near: PlanPoint | null) {
+  const key = JSON.stringify([samples, near])
+  if (!fits.has(key)) {
+    if (fits.size >= 16) fits.delete(fits.keys().next().value as string)
+    fits.set(key, fitHead(samples, near))
+  }
+  return fits.get(key) ?? null
 }
 
 // Why a head can't aim yet, in a sentence, or null once it has a fit.
