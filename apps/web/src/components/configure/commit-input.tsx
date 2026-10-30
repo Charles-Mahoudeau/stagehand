@@ -10,7 +10,7 @@ type Props = Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange'> & {
 // A field that saves when you leave it, rather than on every keystroke.
 export function CommitInput({ value, onCommit, onKeyDown, ...props }: Props) {
   const [draft, setDraft] = useState(value)
-  const cancelled = useRef(false)
+  const canceled = useRef(false)
   useEffect(() => setDraft(value), [value])
 
   return (
@@ -19,13 +19,13 @@ export function CommitInput({ value, onCommit, onKeyDown, ...props }: Props) {
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
-        if (!cancelled.current && draft.trim() !== value) onCommit(draft.trim())
-        cancelled.current = false
+        if (!canceled.current && draft.trim() !== value) onCommit(draft.trim())
+        canceled.current = false
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') e.currentTarget.blur()
         if (e.key === 'Escape') {
-          cancelled.current = true
+          canceled.current = true
           setDraft(value)
           e.currentTarget.blur()
         }

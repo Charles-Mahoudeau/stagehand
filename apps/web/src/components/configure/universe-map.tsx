@@ -5,7 +5,7 @@ import type { Fixture } from '@/lib/rooms'
 type Props = {
   fixtures: Fixture[]
   selected?: Fixture
-  // Channels in conflict, drawn in the warning colour.
+  // Channels in conflict, drawn in the warning color.
   overlapping: Set<number>
   columns: number
   channels?: number

@@ -3,7 +3,7 @@ import { cn } from 'cn'
 import { Slot } from 'radix-ui'
 import type * as React from 'react'
 
-// The Stagehand StatusPill. State colours (live, warning, destructive) only ever colour the dot.
+// The Stagehand StatusPill. State colors (live, warning, destructive) only ever color the dot.
 const badgeVariants = cva(
   'group/badge inline-flex h-6 w-fit shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full bg-surface-2 px-2.5 text-xs whitespace-nowrap text-foreground transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&>svg]:pointer-events-none [&>svg]:size-3!',
   {

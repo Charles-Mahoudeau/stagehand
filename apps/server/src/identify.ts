@@ -5,7 +5,7 @@ import { broadcast } from './ws'
 const TICK_MS = 25
 // One full trip round the hue circle.
 const RAINBOW_PERIOD_MS = 2000
-// Moving heads: colour-wheel step and pan wiggle.
+// Moving heads: color-wheel step and pan wiggle.
 const WHEEL_STEP_MS = 400
 // Evenly spaced guesses at the wheel's slots; the exact values aren't documented.
 const WHEEL_SLOTS = [0, 16, 32, 48, 64, 80, 96, 112]
@@ -85,7 +85,7 @@ class Identify {
   }
 }
 
-// Fully saturated colour for hue h in [0, 1).
+// Fully saturated color for hue h in [0, 1).
 function hueToRgb(h: number): [number, number, number] {
   const channel = (n: number) => {
     const k = (n + h * 6) % 6

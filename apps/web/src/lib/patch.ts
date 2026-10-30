@@ -79,7 +79,7 @@ export function nextName(fixtures: Fixture[]) {
   return `Fixture ${n}`
 }
 
-// The wheel colours in slot order, matching the evenly spaced slots the
+// The wheel colors in slot order, matching the evenly spaced slots the
 // server's identify steps through.
 const WHEEL = [
   '#ffffff',
@@ -92,7 +92,7 @@ const WHEEL = [
   '#ff8c28',
 ]
 
-// What a fixture is putting out, as a CSS colour, or null when dark.
+// What a fixture is putting out, as a CSS color, or null when dark.
 export function outputColor(f: Fixture, channels: number[] | null | undefined): string | null {
   if (!channels) return null
   const at = (offset: number) => channels[f.address - 1 + offset] ?? 0
@@ -100,7 +100,7 @@ export function outputColor(f: Fixture, channels: number[] | null | undefined): 
     const [r, g, b, w] = [at(0), at(1), at(2), at(3)]
     const level = Math.max(r, g, b, w)
     if (level === 0) return null
-    // White lifts every primary; normalise so dim output still reads as its hue.
+    // White lifts every primary; normalize so dim output still reads as its hue.
     const mix = [r + w, g + w, b + w]
     const peak = Math.max(...mix)
     const alpha = 0.35 + (0.65 * level) / 255

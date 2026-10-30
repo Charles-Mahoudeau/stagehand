@@ -64,7 +64,7 @@ export function useRoomMutations() {
       },
       onSuccess,
     }),
-    // Floor size in metres; null clears it.
+    // Floor size in meters; null clears it.
     resize: useMutation({
       mutationFn: async ({
         id,

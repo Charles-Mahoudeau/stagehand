@@ -63,7 +63,7 @@ export function JogPad({ head, roomActive }: Props) {
     repeat.current = setInterval(() => jog(pan, tilt), REPEAT_MS)
   }
   const toggleBeam = () => {
-    // Fastest moves, full dimmer, shutter open; colour and gobo stay as they are.
+    // Fastest moves, full dimmer, shutter open; color and gobo stay as they are.
     setChannels(head.address + SPEED_OFFSET, beamOn ? [0, 0, 0] : [0, 255, 0])
   }
 

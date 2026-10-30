@@ -41,7 +41,7 @@ const HeightSchema = z
   .min(0)
   .max(50)
   .nullable()
-  .openapi({ description: 'Metres above the floor; null = on the floor' })
+  .openapi({ description: 'Meters above the floor; null = on the floor' })
 
 const TargetSchema = z
   .object({
@@ -188,7 +188,7 @@ const aim = createRoute({
   summary: 'Aim moving heads at a target or a spot',
   description:
     'Sets pan/tilt of each head from its calibration. Heads that are not calibrated, or ' +
-    'can’t reach the spot, are skipped. Only moves the heads; dimmer and colour stay as they are.',
+    'can’t reach the spot, are skipped. Only moves the heads; dimmer and color stay as they are.',
   request: {
     params: RoomParams,
     body: { required: true, content: { 'application/json': { schema: AimSchema } } },

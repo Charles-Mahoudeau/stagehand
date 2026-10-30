@@ -32,7 +32,7 @@ export const FIXTURE_PROFILES: Record<FixtureType, FixtureProfile> = {
       { attribute: 'speed', label: 'Pan/tilt speed' },
       { attribute: 'dimmer', label: 'Dimmer' },
       { attribute: 'shutter', label: 'Shutter / strobe' },
-      { attribute: 'color', label: 'Colour wheel' },
+      { attribute: 'color', label: 'Color wheel' },
       { attribute: 'gobo', label: 'Gobo wheel' },
       { attribute: 'prism', label: 'Rotating prism' },
       { attribute: 'control', label: 'Demo mode / reset' },

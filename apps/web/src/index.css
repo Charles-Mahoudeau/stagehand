@@ -5,7 +5,7 @@
 @import "@fontsource-variable/jetbrains-mono";
 
 /* Stagehand design system: https://claude.ai/artifact/DMvZVU2KumqUdhtsGUCAiN
-   Black only. Hue on screen means light output; white is the only selection colour. */
+   Black only. Hue on screen means light output; white is the only selection color. */
 
 @custom-variant dark (&:is(.dark *));
 

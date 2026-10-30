@@ -8,7 +8,7 @@ import { createRouter } from '../lib/router'
 import { errorResponse, jsonResponse as json } from '../lib/schemas'
 import { broadcast } from '../ws'
 
-// Metres. Heads aim by the room's real proportions once both are set.
+// Meters. Heads aim by the room's real proportions once both are set.
 const SizeSchema = z.number().positive().max(1000).nullable()
 
 const RoomSchema = z
@@ -16,8 +16,8 @@ const RoomSchema = z
     id: z.number().int().openapi({ example: 1 }),
     name: z.string().openapi({ example: 'Wakanda' }),
     active: z.boolean().openapi({ description: 'Whether this is the room the server is driving' }),
-    width: SizeSchema.openapi({ description: 'Floor width in metres; null = not measured' }),
-    depth: SizeSchema.openapi({ description: 'Floor depth in metres; null = not measured' }),
+    width: SizeSchema.openapi({ description: 'Floor width in meters; null = not measured' }),
+    depth: SizeSchema.openapi({ description: 'Floor depth in meters; null = not measured' }),
   })
   .openapi('Room')
 

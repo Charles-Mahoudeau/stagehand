@@ -33,13 +33,13 @@ const positive = (v: number | null | undefined): v is number =>
   typeof v === 'number' && Number.isFinite(v) && v > 0
 
 // The geometry of a head in a room, or null while the room has no size or the
-// head no height (metres).
+// head no height (meters).
 export function headGeometry(room: RoomSize, headHeight: number | null): Geometry | null {
   if (!positive(room.width) || !positive(room.depth) || !positive(headHeight)) return null
   return { aspect: room.depth / room.width, height: headHeight / room.width }
 }
 
-// A plan spot lifted to `height` metres, when the room has a width to convert
+// A plan spot lifted to `height` meters, when the room has a width to convert
 // it with. Otherwise it stays on the floor.
 export function spotAt(room: RoomSize, p: PlanPoint, height: number | null): Spot {
   return positive(room.width) && positive(height) ? { ...p, z: height / room.width } : p

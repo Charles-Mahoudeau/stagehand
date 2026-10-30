@@ -426,7 +426,7 @@ function PointInspector({
   )
 }
 
-// The scale of the precision map, in the room's units: metres once it has a
+// The scale of the precision map, in the room's units: meters once it has a
 // width, else a share of it.
 function PrecisionLegend({ room }: { room: Room }) {
   const worst = room.width
@@ -446,7 +446,7 @@ function PrecisionLegend({ room }: { room: Room }) {
 }
 
 // Measurements that turn the fit from a guess into a check: the room's floor
-// size and how high the head hangs, in metres.
+// size and how high the head hangs, in meters.
 function GeometryCard({
   room,
   head,
@@ -462,10 +462,10 @@ function GeometryCard({
   const error = invalid ?? resize.error?.message ?? update.error?.message
 
   // Empty clears the measurement.
-  const metres = (text: string, max: number, then: (v: number | null) => void) => {
+  const meters = (text: string, max: number, then: (v: number | null) => void) => {
     const v = Number(text)
     if (text !== '' && (Number.isNaN(v) || v <= 0 || v > max)) {
-      return setInvalid(`Measurements are in metres, above 0 and up to ${max}`)
+      return setInvalid(`Measurements are in meters, above 0 and up to ${max}`)
     }
     setInvalid(null)
     then(text === '' ? null : v)
@@ -481,21 +481,21 @@ function GeometryCard({
           label="Width (m)"
           placeholder="?"
           value={shown(room.width)}
-          onCommit={(t) => metres(t, 1000, (width) => resize.mutate({ id: room.id, width }))}
+          onCommit={(t) => meters(t, 1000, (width) => resize.mutate({ id: room.id, width }))}
         />
         <NumberField
           id="room-depth"
           label="Depth (m)"
           placeholder="?"
           value={shown(room.depth)}
-          onCommit={(t) => metres(t, 1000, (depth) => resize.mutate({ id: room.id, depth }))}
+          onCommit={(t) => meters(t, 1000, (depth) => resize.mutate({ id: room.id, depth }))}
         />
         <NumberField
           id="head-height"
           label="Head (m)"
           placeholder="?"
           value={shown(head.height)}
-          onCommit={(t) => metres(t, 100, (height) => update.mutate({ id: head.id, height }))}
+          onCommit={(t) => meters(t, 100, (height) => update.mutate({ id: head.id, height }))}
         />
       </div>
       <span className="text-xs leading-normal text-muted-foreground">

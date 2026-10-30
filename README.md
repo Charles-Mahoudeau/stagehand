@@ -54,9 +54,9 @@ component previews). The rules that matter most:
 
 - **Black only.** There is no light theme. `index.html` sets `class="dark"`
   so shadcn's `dark:` variants apply.
-- **Light is the only colour.** Hue on screen means DMX output (fixture dots,
-  group tiles, cue strips). Chrome stays black, grey and white. The exceptions
-  are the state colours `live`, `warning` and `destructive` (dots and pills
+- **Light is the only color.** Hue on screen means DMX output (fixture dots,
+  group tiles, cue strips). Chrome stays black, gray and white. The exceptions
+  are the state colors `live`, `warning` and `destructive` (dots and pills
   only) and the fader tints `ch-red`, `ch-green`, `ch-blue` and `ch-white`.
 - **White is the selection.** The active tab, the primary button and the
   selected fixture (`shadow-select`) use it. There is no brand accent.
@@ -71,7 +71,7 @@ component previews). The rules that matter most:
   and `h-control-go` (96px) for Go.
 
 Tokens live in `apps/web/src/index.css`. The shadcn variables are mapped onto
-them, and the extra ones are exposed as Tailwind colours: `surface-0` to
+them, and the extra ones are exposed as Tailwind colors: `surface-0` to
 `surface-3`, `border-subtle`, `off-ring`, `live`, `warning` and `ch-*`. The
 shadcn components in `src/components/ui/` are restyled to match:
 

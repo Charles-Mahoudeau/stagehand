@@ -14,26 +14,26 @@ canals 4 and 10) to 255 lit both side walls blue and nothing else.
 
 ## Canals
 
-| Canal | DMX address | Profile     | Colour on plan | Fixtures | Where                                 |
+| Canal | DMX address | Profile     | Color on plan | Fixtures | Where                                 |
 | ----: | ----------: | ----------- | -------------- | -------: | ------------------------------------- |
-|     1 |           1 | fixed RGBW  | red            |        2 | back row (row A), two centre spots    |
-|     2 |          17 | fixed RGBW  | yellow         |        2 | second row (row B), two centre spots  |
+|     1 |           1 | fixed RGBW  | red            |        2 | back row (row A), two center spots    |
+|     2 |          17 | fixed RGBW  | yellow         |        2 | second row (row B), two center spots  |
 |     3 |          33 | —           | —              |        0 | unused                                |
 |     4 |          49 | fixed RGBW  | green          |        4 | left wall, column of four             |
 |     5 |          65 | —           | —              |        0 | unused                                |
-|     6 |          81 | moving head | light orange   |        1 | movable; drawn centre-left, mid-room  |
+|     6 |          81 | moving head | light orange   |        1 | movable; drawn center-left, mid-room  |
 |     7 |          97 | fixed RGBW  | purple         |        2 | back row (row A), two outer corners   |
 |     8 |         113 | fixed RGBW  | pink           |        2 | second row (row B), two outer spots   |
 |     9 |         129 | —           | —              |        0 | unused                                |
 |    10 |         145 | fixed RGBW  | dark blue      |        4 | right wall, column of four            |
 |    11 |         161 | —           | —              |        0 | unused                                |
-|    12 |         177 | moving head | dark orange    |        1 | movable; drawn centre-right, mid-room |
+|    12 |         177 | moving head | dark orange    |        1 | movable; drawn center-right, mid-room |
 
 The profile column assumes the movables (6, 12) are the two moving heads and
 every other fixture is a fixed projector; only canals 4 and 10 are verified.
 
 18 fixtures on 8 live canals. The layout is mirror-symmetric left↔right:
-1/2 are centre pairs, 7/8 are outer pairs, 4 ↔ 10 are the side walls, 6 ↔ 12
+1/2 are center pairs, 7/8 are outer pairs, 4 ↔ 10 are the side walls, 6 ↔ 12
 are the movable pair.
 
 ## Layout
@@ -58,7 +58,7 @@ row B   |     [8]        [2]       [2]       [8]        |
 
 ## Coordinates
 
-Fixture centres as fractions of the room's width (x, 0 = left wall) and depth
+Fixture centers as fractions of the room's width (x, 0 = left wall) and depth
 (y, 0 = stage side, 1 = back of room), measured from the plan. Useful for spatial effects (sweeps,
 chases); approximate, not surveyed.
 
@@ -84,7 +84,7 @@ chases); approximate, not surveyed.
 |    12 | M2 (movable)            | 0.61 | 0.50 |
 
 Because fixtures sharing a canal can't be driven independently, effects can
-only address these groups: stage-front centre (1), second-row centre (2), left
+only address these groups: stage-front center (1), second-row center (2), left
 wall (4), right wall (10), stage-front corners (7), second-row outer (8), and
 the two movables (6, 12) individually. Front-to-back sweeps run 7/1 → 8/2 →
 4/10 (the walls are one canal each, so they light along their whole length).
@@ -115,7 +115,7 @@ first channel).
 |     +4 | Pan/Tilt speed    | 0 = instant / fast, 255 = very slow                         |
 |     +5 | Dimmer master     | Intensity, 0–100%                                           |
 |     +6 | Shutter / Strobe  | 0–15 open, 16–255 strobe frequency                          |
-|     +7 | Colour wheel      | Index of fixed colours: white, red, blue, green, yellow, …  |
+|     +7 | Color wheel      | Index of fixed colors: white, red, blue, green, yellow, …  |
 |     +8 | Gobo wheel        | Projected patterns: solid circle, stars, lightning bolts, … |
 |     +9 | Rotating prism    | Beam multiplication and rotation                            |
 |    +10 | Demo mode / Reset | Keep at 0 for manual DMX control                            |

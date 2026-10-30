@@ -31,7 +31,7 @@ const HeightSchema = z
   .positive()
   .max(100)
   .nullable()
-  .openapi({ description: 'Metres above the floor; null = not measured', example: 5 })
+  .openapi({ description: 'Meters above the floor; null = not measured', example: 5 })
 
 const FixtureSchema = z
   .object({
@@ -168,7 +168,7 @@ const startIdentify = createRoute({
   tags: ['Fixtures'],
   summary: 'Start the identify rainbow on a fixture',
   description:
-    'Cycles colours on the fixture’s channels (and so on every fixture sharing its address) ' +
+    'Cycles colors on the fixture’s channels (and so on every fixture sharing its address) ' +
     'until stopped. Only one fixture identifies at a time; starting another stops the first.',
   request: { params: FixtureParams },
   responses: {

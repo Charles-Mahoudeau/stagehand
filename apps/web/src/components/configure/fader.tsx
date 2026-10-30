@@ -5,7 +5,7 @@ type Props = {
   // The live value from the server.
   value: number
   onChange: (value: number) => void
-  // Colour of the fill, as a CSS colour.
+  // Color of the fill, as a CSS color.
   tint: string
   disabled?: boolean
 }

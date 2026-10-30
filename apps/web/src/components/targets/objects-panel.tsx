@@ -199,7 +199,7 @@ function ObjectInspector({
   const saveHeight = (text: string) => {
     if (text === '') return save({ height: null })
     const v = Number(text)
-    if (Number.isNaN(v) || v < 0 || v > 50) return setInvalid('Height is in metres, from 0 to 50')
+    if (Number.isNaN(v) || v < 0 || v > 50) return setInvalid('Height is in meters, from 0 to 50')
     save({ height: v })
   }
   // Changes one head's correction and re-aims it, so the change shows in the room.
