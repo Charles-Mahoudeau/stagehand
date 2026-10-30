@@ -53,7 +53,8 @@ const BEAM = 'rgb(255 236 200)'
 export function CalibratePanel(props: Props) {
   const { room, fixtures, points, head, point, onSelectPoint, modeSwitch } = props
   const { dmx, setChannels } = useLive()
-  const { create, update } = useCalibrationMutations(room.id)
+  const { create, update, remove } = useCalibrationMutations(room.id)
+  const [confirmClear, setConfirmClear] = useState(false)
   const test = useMutation({
     mutationFn: (position: { x: number; y: number }) => aim(room.id, [head?.id ?? 0], { position }),
   })
@@ -86,8 +87,15 @@ export function CalibratePanel(props: Props) {
     }
   }
 
+  const clearAll = () => {
+    if (!confirmClear) return setConfirmClear(true)
+    setConfirmClear(false)
+    onSelectPoint(null)
+    for (const p of calibration?.points ?? []) remove.mutate(p)
+  }
+
   const beamColor = (head && outputColor(head, channels)) ?? BEAM
-  const error = create.error ?? update.error ?? test.error
+  const error = create.error ?? update.error ?? remove.error ?? test.error
   const skipped = test.data?.skipped[0]
 
   return (
@@ -158,6 +166,18 @@ export function CalibratePanel(props: Props) {
             >
               Add point
             </Button>
+            {calibration.points.length > 0 && (
+              <Button
+                variant="dashed"
+                disabled={remove.isPending || wizard.running}
+                onBlur={() => setConfirmClear(false)}
+                onClick={clearAll}
+              >
+                {confirmClear
+                  ? `Confirm: clear ${calibration.points.length} points`
+                  : 'Clear all points'}
+              </Button>
+            )}
             <p className="px-2.5 pt-1.5 pb-1 text-xs leading-normal text-muted-foreground">
               Mark spots you can find in the room, spread to the edges of where the head has to
               reach. {calibration.needed} saved points are enough
@@ -200,6 +220,14 @@ export function CalibratePanel(props: Props) {
                     shape="cross"
                     label="Aimed here"
                     position={wizard.step.probe.spot}
+                    pending
+                  />
+                )}
+                {wizard.step?.kind === 'place' && (
+                  <PlanMarker
+                    shape="cross"
+                    label={`Aim here (${wizard.step.index + 1}/${wizard.step.total})`}
+                    position={wizard.step.spot}
                     pending
                   />
                 )}
@@ -264,7 +292,9 @@ export function CalibratePanel(props: Props) {
                 : !calibration.fit
                   ? calibrationIssue(head, calibration)
                   : wizard.running
-                    ? 'Click the floor where the beam lands'
+                    ? wizard.step?.kind === 'place'
+                      ? 'Jog the beam onto the marked spot'
+                      : 'Click the floor where the beam lands'
                     : room.active
                       ? `Click the floor to test-aim ${head.name} there`
                       : 'Make this room active to test-aim'}

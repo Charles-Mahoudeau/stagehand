@@ -8,11 +8,13 @@ import {
   type CalibrationPoint,
   DIMMER_OFFSET,
   type HeadCalibration,
+  livePanTilt,
   panTiltValues,
   SPEED_OFFSET,
   useCalibrationMutations,
 } from '@/lib/targets'
 import { distanceCm, TARGET_CM, type WizardStep, wizardStep } from '@/lib/wizard'
+import { JogPad } from './jog-pad'
 
 type Run = {
   headId: number
@@ -30,7 +32,7 @@ export function useCalibrationWizard(
   calibration: HeadCalibration | undefined,
   points: CalibrationPoint[],
 ) {
-  const { setChannels } = useLive()
+  const { dmx, setChannels } = useLive()
   const { create } = useCalibrationMutations(room.id)
   const [run, setRun] = useState<Run | null>(null)
   const running = !!head && run?.headId === head.id
@@ -42,9 +44,14 @@ export function useCalibrationWizard(
       ? wizardStep({ room, head, calibration, skipped: run.skipped, misses: run.misses })
       : null
   const probe = step?.kind === 'probe' ? step.probe : null
+  const place = step?.kind === 'place' ? step : null
 
   // Send the head to each new aim, beam on (fastest moves, full dimmer, shutter open).
   const address = head?.address
+  // On a grid spot the user jogs the beam there, so it only has to be on.
+  useEffect(() => {
+    if (address !== undefined && running) live.current(address + SPEED_OFFSET, [0, 255, 0])
+  }, [address, running])
   const pan = probe?.aim.pan
   const tilt = probe?.aim.tilt
   useEffect(() => {
@@ -74,12 +81,24 @@ export function useCalibrationWizard(
     error: create.error,
     start: () => head && setRun({ headId: head.id, placed: null, skipped: [], misses: [] }),
     stop,
-    place: (placed: PlanPoint) => setRun((r) => r && { ...r, placed }),
+    place: (placed: PlanPoint) => probe && setRun((r) => r && { ...r, placed }),
     // Can't see the beam: ask for a different aim.
     skip: () =>
-      setRun((r) => r && { ...r, placed: null, skipped: [...r.skipped, probe?.spot ?? null] }),
+      setRun(
+        (r) =>
+          r && { ...r, placed: null, skipped: [...r.skipped, probe?.spot ?? place?.spot ?? null] },
+      ),
     confirm: () => {
-      if (!head || !run?.placed || !probe) return
+      if (!head) return
+      if (place) {
+        // Wherever the user jogged the beam is the aim for this grid spot.
+        const aimed = livePanTilt(head, dmx?.channels)
+        if (aimed) {
+          create.mutate({ fixtureId: head.id, name: nextName(), position: place.spot, ...aimed })
+        }
+        return
+      }
+      if (!run?.placed || !probe) return
       const { placed } = run
       create.mutate(
         { fixtureId: head.id, name: nextName(), position: placed, ...probe.aim },
@@ -133,6 +152,27 @@ export function WizardCard({ head, wizard }: { head: Fixture; wizard: Wizard }) 
           <h2 className="text-[15px] font-semibold">Calibration wizard</h2>
           <span className="font-mono text-xs text-muted-foreground">{head.name}</span>
         </div>
+
+        {step?.kind === 'place' && (
+          <>
+            <p className="text-sm leading-normal">
+              {`Jog ${head.name} until its beam sits on the marked grid spot ${step.index + 1} of ${step.total}, then save it.`}
+            </p>
+            <p className="text-xs leading-normal text-muted-foreground">
+              Corners, center and edges first: they span the floor, so a few are enough for a fit.
+              Can’t reach or see the spot? Skip it.
+            </p>
+            <JogPad head={head} roomActive />
+            <div className="grid grid-cols-[2fr_1fr] gap-2.5">
+              <Button size="lg" variant="default" disabled={saving} onClick={wizard.confirm}>
+                {saving ? 'Saving…' : 'Save spot'}
+              </Button>
+              <Button size="lg" disabled={saving} onClick={wizard.skip}>
+                Skip
+              </Button>
+            </div>
+          </>
+        )}
 
         {step?.kind === 'probe' && (
           <>
@@ -201,11 +241,14 @@ export function WizardCard({ head, wizard }: { head: Fixture; wizard: Wizard }) 
             ? 'Worst expected miss over the floor the head can reach.'
             : `Last aim landed ${Math.round(last)} cm from where it should. Worst expected miss over the floor the head can reach.`}
         </span>
-        {step?.kind === 'probe' && !dmx?.channels[head.address - 1 + DIMMER_OFFSET] && (
-          <span className="text-xs text-warning">
-            The beam is off: make sure this room is active.
-          </span>
-        )}
+        {step &&
+          step.kind !== 'done' &&
+          step.kind !== 'blocked' &&
+          !dmx?.channels[head.address - 1 + DIMMER_OFFSET] && (
+            <span className="text-xs text-warning">
+              The beam is off: make sure this room is active.
+            </span>
+          )}
       </div>
 
       {step?.kind !== 'done' && (
