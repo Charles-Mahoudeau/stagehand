@@ -334,9 +334,17 @@ export function evalEffect(
       const list = heads()
       return each(list, units, (u) => {
         const i = list.indexOf(u)
-        const a = t * p.speed * 0.5 + i * Math.PI
+        const a = t * p.speed * 0.5 * (p.rev ? -1 : 1) + i * p.spread * Math.PI * 2
+        let x: number
+        let y: number
+        if (p.shape === 'eight') [x, y] = [Math.sin(a), Math.sin(2 * a)]
+        else if (p.shape === 'sweep') [x, y] = [Math.sin(a), 0]
+        else if (p.shape === 'random') {
+          const n = t * p.speed * 0.25 * (p.rev ? -1 : 1)
+          ;[x, y] = [noise(n + i * 37.3) * 2 - 1, noise(n + i * 71.9 + 500) * 2 - 1]
+        } else [x, y] = [Math.cos(a), Math.sin(a)]
         const aim = p.target
-          ? { target: p.target, dPan: p.radius * 1.6 * Math.cos(a), dTilt: p.radius * Math.sin(a) }
+          ? { target: p.target, dPan: p.radius * x, dTilt: p.radius * p.ratio * y }
           : null
         return { c: scale(hexToRgb(p.color), p.level), aim }
       })

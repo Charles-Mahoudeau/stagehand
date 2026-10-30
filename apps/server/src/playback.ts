@@ -461,13 +461,9 @@ function writeFrame(c: Cache, frame: Frame) {
     const out = frame.get(f.address)
     if (!out) continue
     if (f.type === 'par') {
-      const w = Math.min(...out.c)
-      dmxOutput.set(f.address, [
-        byte(out.c[0] - w),
-        byte(out.c[1] - w),
-        byte(out.c[2] - w),
-        byte(w),
-      ])
+      // White comes from mixing RGB: the 4th channel is documented as white but
+      // was never verified, and a value there made the pars show random colors.
+      dmxOutput.set(f.address, [byte(out.c[0]), byte(out.c[1]), byte(out.c[2]), 0])
       continue
     }
     const pt = out.aim ? aimed(c, f, out.aim) : null

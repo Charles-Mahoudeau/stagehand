@@ -31,6 +31,10 @@ export type EffectKind = (typeof EFFECT_KINDS)[number]
 export const SPREAD_MODES = ['same', 'front', 'back', 'out', 'radial', 'random'] as const
 export type SpreadMode = (typeof SPREAD_MODES)[number]
 
+// The path a head follows in the orbit effect.
+export const ORBIT_SHAPES = ['circle', 'eight', 'sweep', 'random'] as const
+export type OrbitShape = (typeof ORBIT_SHAPES)[number]
+
 // One flash of a one-shot, in seconds. Several clips make a strike.
 export const Clip = z.object({
   at: z.number().min(0).max(5),
@@ -85,6 +89,9 @@ export const ParamsSchema = z
     // A target's ID (slug) the heads aim at.
     target: z.string().max(40).nullable(),
     radius: z.number().min(1).max(90),
+    shape: z.enum(ORBIT_SHAPES),
+    // Tilt travel as a fraction of the pan travel.
+    ratio: z.number().min(0.1).max(2),
     // Gobo wheel slot a head projects; 0 is the open (solid) slot.
     // Prism rotation from none (0) to the fastest the head can turn (1).
     spin: Unit,
@@ -130,6 +137,8 @@ const BASE: Params = {
   every: 4,
   target: null,
   radius: 20,
+  shape: 'circle',
+  ratio: 0.6,
   spin: 0.5,
   gobo: 0,
   auto: false,
@@ -203,7 +212,18 @@ export const FIELDS: Partial<Record<keyof Params, Field>> = {
   base: range('Rest level', 0, 1, 0.01, 'pct'),
   every: range('Every', 1.5, 12, 0.1, 's'),
   target: { type: 'target', label: 'Aim at' },
-  radius: range('Radius', 2, 60, 1, 'deg'),
+  radius: range('Amplitude', 2, 60, 1, 'deg'),
+  shape: {
+    type: 'seg',
+    label: 'Path',
+    options: [
+      ['circle', 'Circle'],
+      ['eight', 'Figure 8'],
+      ['sweep', 'Sweep'],
+      ['random', 'Random'],
+    ],
+  },
+  ratio: range('Height', 0.1, 2, 0.05, 'x'),
   spin: range('Speed', 0, 1, 0.01, 'max'),
   gobo: range('Gobo', 0, 7, 1, 'n'),
   auto: { type: 'switch', label: 'Repeat at random' },
@@ -407,15 +427,15 @@ export const GENERATOR_INFO: Record<Generator, GeneratorInfo> = {
   },
   orbit: {
     id: 'orbit',
-    name: 'Moon orbit',
+    name: 'Orbit',
     kind: 'Moving head',
     once: false,
     description:
-      'The heads drift in opposite circles around a target, like moonlight through clouds.',
-    defaults: { color: '#cfe0ff', level: 0.8, speed: 0.5 },
+      'The heads travel a path around a target: a circle, a figure 8, a sweep or a random wander.',
+    defaults: { color: '#cfe0ff', level: 0.8, speed: 0.5, spread: 0.5 },
     sections: [
       ['Where', ['groups', 'target']],
-      ['Motion', ['speed', 'radius']],
+      ['Motion', ['shape', 'speed', 'radius', 'ratio', 'spread', 'rev']],
       ['Level', ['level']],
       ['Color', ['color']],
     ],
