@@ -8,10 +8,13 @@ import { requireAuth } from './lib/auth'
 import { createRouter } from './lib/router'
 import { webDistDir } from './paths'
 import { auth } from './routes/auth'
+import { cueRoutes } from './routes/cues'
 import { dmx } from './routes/dmx'
+import { effectRoutes } from './routes/effects'
 import { fixtureRoutes } from './routes/fixtures'
 import { health } from './routes/health'
 import { roomRoutes } from './routes/rooms'
+import { sceneRoutes } from './routes/scenes'
 import { targetRoutes } from './routes/targets'
 import { wsHandler } from './ws'
 
@@ -29,6 +32,9 @@ const routes = app
   .route('/api', roomRoutes)
   .route('/api', fixtureRoutes)
   .route('/api', targetRoutes)
+  .route('/api', effectRoutes)
+  .route('/api', sceneRoutes)
+  .route('/api', cueRoutes)
 
 app.get('/ws', wsHandler)
 

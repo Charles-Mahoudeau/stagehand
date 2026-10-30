@@ -6,6 +6,7 @@ import { dmxOutput } from '../dmx'
 import { identify } from '../identify'
 import { createRouter } from '../lib/router'
 import { errorResponse, jsonResponse as json } from '../lib/schemas'
+import { playback } from '../playback'
 import { broadcast } from '../ws'
 
 // Meters. Heads aim by the room's real proportions once both are set.
@@ -168,6 +169,7 @@ export const roomRoutes = createRouter()
       return tx.update(rooms).set({ active: true }).where(eq(rooms.id, roomId)).returning().get()
     })
     identify.stop({ restore: false })
+    playback.stop({ blackout: false })
     dmxOutput.blackout()
     broadcast({ type: 'rooms.changed' })
     return c.json(room, 200)

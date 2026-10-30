@@ -4,6 +4,7 @@ import type { WSContext } from 'hono/ws'
 import pkg from '../package.json' with { type: 'json' }
 import { DMX_CHANNELS, dmxOutput } from './dmx'
 import { identify } from './identify'
+import { playback } from './playback'
 
 const encode = (msg: ServerMessage) => JSON.stringify(msg)
 
@@ -47,6 +48,7 @@ export const wsHandler = upgradeWebSocket(() => ({
     ws.send(encode({ type: 'hello', version: pkg.version }))
     ws.send(encode(dmxState()))
     ws.send(encode({ type: 'identify.changed', fixtureId: identify.fixtureId() }))
+    ws.send(encode({ type: 'playback.state', state: playback.state() }))
   },
   onClose(_event, ws) {
     clients.delete(ws)

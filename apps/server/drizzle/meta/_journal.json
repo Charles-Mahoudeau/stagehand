@@ -29,6 +29,13 @@
       "when": 1793326375392,
       "tag": "0003_special_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793379448953,
+      "tag": "0004_bouncy_king_bedlam",
+      "breakpoints": true
     }
   ]
 }

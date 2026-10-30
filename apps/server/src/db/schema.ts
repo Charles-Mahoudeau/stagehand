@@ -1,6 +1,13 @@
 // Drizzle table definitions. After editing, run `pnpm db:generate` to create a
 // migration; migrations are applied automatically on server start.
-import { FIXTURE_TYPES } from '@stagehand/shared'
+import {
+  CUE_TRIGGERS,
+  FIXTURE_TYPES,
+  GENERATORS,
+  type Look,
+  type ParamsInput,
+  type SceneEffectRef,
+} from '@stagehand/shared'
 import { sql } from 'drizzle-orm'
 import {
   index,
@@ -85,4 +92,59 @@ export const targetPositions = sqliteTable(
     tilt: integer('tilt').notNull(),
   },
   (t) => [primaryKey({ columns: [t.targetId, t.fixtureId] })],
+)
+
+// A reusable effect: one generator with its parameters. Scenes and pads refer
+// to it by id, so editing it changes everything that uses it, live.
+export const effects = sqliteTable(
+  'effects',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    roomId: integer('room_id')
+      .notNull()
+      .references(() => rooms.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    generator: text('generator', { enum: GENERATORS }).notNull(),
+    params: text('params', { mode: 'json' }).$type<ParamsInput>().notNull(),
+    // Shown as a pad on the Perform page.
+    pad: integer('pad', { mode: 'boolean' }).notNull().default(false),
+  },
+  (t) => [uniqueIndex('effects_room_name_unique').on(t.roomId, sql`lower(${t.name})`)],
+)
+
+// A static look per DMX address plus the library effects that run under it.
+export const scenes = sqliteTable(
+  'scenes',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    roomId: integer('room_id')
+      .notNull()
+      .references(() => rooms.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    tag: text('tag').notNull().default(''),
+    look: text('look', { mode: 'json' }).$type<Look>().notNull(),
+    effects: text('effects', { mode: 'json' }).$type<SceneEffectRef[]>().notNull(),
+    fade: real('fade').notNull().default(2),
+  },
+  (t) => [uniqueIndex('scenes_room_name_unique').on(t.roomId, sql`lower(${t.name})`)],
+)
+
+// One line of the cue list: call a scene, in order.
+export const cues = sqliteTable(
+  'cues',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    roomId: integer('room_id')
+      .notNull()
+      .references(() => rooms.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    name: text('name').notNull(),
+    sceneId: integer('scene_id')
+      .notNull()
+      .references(() => scenes.id, { onDelete: 'cascade' }),
+    fade: real('fade'),
+    trigger: text('trigger', { enum: CUE_TRIGGERS }).notNull().default('go'),
+    delay: real('delay').notNull().default(0),
+  },
+  (t) => [index('cues_room_position').on(t.roomId, t.position)],
 )

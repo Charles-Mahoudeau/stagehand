@@ -2,6 +2,7 @@ import { createRoute, z } from '@hono/zod-openapi'
 import { DMX_CHANNELS, dmxOutput } from '../dmx'
 import { identify } from '../identify'
 import { createRouter } from '../lib/router'
+import { playback } from '../playback'
 
 const DmxStateSchema = z
   .object({
@@ -78,6 +79,7 @@ export const dmx = createRouter()
   })
   .openapi(blackout, (c) => {
     identify.stop({ restore: false })
+    playback.stop({ blackout: false })
     dmxOutput.blackout()
     return c.body(null, 204)
   })
