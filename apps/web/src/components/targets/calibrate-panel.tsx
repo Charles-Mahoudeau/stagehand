@@ -16,6 +16,7 @@ import {
   type HeadCalibration,
   headCalibration,
   livePanTilt,
+  panTiltValues,
   useCalibrationMutations,
 } from '@/lib/targets'
 import { JogPad } from './jog-pad'
@@ -40,7 +41,7 @@ const BEAM = 'rgb(255 236 200)'
 // save pan/tilt for each. Four saved spots let it aim anywhere.
 export function CalibratePanel(props: Props) {
   const { room, fixtures, points, head, point, onSelectPoint, modeSwitch } = props
-  const { dmx } = useLive()
+  const { dmx, setChannels } = useLive()
   const { create, update } = useCalibrationMutations(room.id)
   const test = useMutation({
     mutationFn: (position: { x: number; y: number }) => aim(room.id, [head?.id ?? 0], { position }),
@@ -55,6 +56,18 @@ export function CalibratePanel(props: Props) {
       { fixtureId: head.id, name, position: { x: 0.5, y: 0.5 } },
       { onSuccess: (p) => onSelectPoint(p.id) },
     )
+  }
+
+  // Picking a point sends the head to it: to the saved aim, or else to where
+  // the fit says it is, so the beam starts close for fine jogging.
+  const selectPoint = (p: CalibrationPoint) => {
+    onSelectPoint(p.id)
+    if (!head || !room.active) return
+    if (p.pan !== null && p.tilt !== null) {
+      setChannels(head.address, panTiltValues({ pan: p.pan, tilt: p.tilt }))
+    } else if (calibration?.fit) {
+      test.mutate(p.position)
+    }
   }
 
   const beamColor = (head && outputColor(head, channels)) ?? BEAM
@@ -81,7 +94,7 @@ export function CalibratePanel(props: Props) {
                   key={p.id}
                   variant="ghost"
                   aria-current={p.id === point?.id}
-                  onClick={() => onSelectPoint(p.id)}
+                  onClick={() => selectPoint(p)}
                   className="h-auto min-h-[52px] justify-start gap-3 px-2.5 py-1.5 font-normal"
                 >
                   <span
@@ -120,7 +133,8 @@ export function CalibratePanel(props: Props) {
             </Button>
             <p className="px-2.5 pt-1.5 pb-1 text-xs leading-normal text-muted-foreground">
               Mark spots you can find in the room, spread to the edges of where the head has to
-              reach. {MIN_CALIBRATION_POINTS} saved points are enough.
+              reach. {MIN_CALIBRATION_POINTS} saved points are enough. Picking a point moves{' '}
+              {head.name} to it.
             </p>
           </div>
         )}
@@ -153,7 +167,7 @@ export function CalibratePanel(props: Props) {
                     position={p.position}
                     selected={p.id === point?.id}
                     pending={p.pan === null || p.tilt === null}
-                    onSelect={() => onSelectPoint(p.id)}
+                    onSelect={() => selectPoint(p)}
                     onMove={(position) =>
                       update.mutate({ id: p.id, fixtureId: p.fixtureId, position })
                     }
