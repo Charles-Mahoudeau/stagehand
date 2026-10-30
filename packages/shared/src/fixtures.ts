@@ -43,3 +43,17 @@ export const FIXTURE_PROFILES: Record<FixtureType, FixtureProfile> = {
 export function channelCount(type: FixtureType) {
   return FIXTURE_PROFILES[type].channels.length
 }
+
+// The moving head's color wheel: eight slots 16 DMX values apart, with the color
+// each one shows. The order was checked on the head; the slots aren't documented.
+export const WHEEL_COLORS = [
+  { name: 'White', hex: '#ffffff' },
+  { name: 'Red', hex: '#ff3b3b' },
+  { name: 'Yellow', hex: '#ffd23c' },
+  { name: 'Green', hex: '#46dc78' },
+  { name: 'Orange', hex: '#ff8c28' },
+  { name: 'Dark blue', hex: '#2a3cd8' },
+  { name: 'Magenta', hex: '#e040e0' },
+  { name: 'Light blue', hex: '#5cc8ff' },
+] as const
+export const WHEEL_STEP = 16

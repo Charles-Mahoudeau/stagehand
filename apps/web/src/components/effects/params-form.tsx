@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Field, Section } from '@/components/shell/panel'
 import type { Effect } from '@/lib/show'
 import type { Target } from '@/lib/targets'
-import { ColorRow, RangeRow, SegRow, SwitchRow, useThrottle } from './controls'
+import { ColorRow, RangeRow, SegRow, SwitchRow, useThrottle, WheelRow } from './controls'
 
 // A group of fixtures sharing an address, as the editor offers it.
 export type GroupChoice = { address: number; label: string; mover: boolean }
@@ -51,7 +51,7 @@ export function ParamsForm({ effect, groups, targets, onChange }: Props) {
       {info.sections.map(([title, keys]) => (
         <Section key={title} title={title}>
           {keys.map((key) => {
-            const field = FIELDS[key]
+            const field = info.fields?.[key] ?? FIELDS[key]
             if (!field) return null
             const value = params[key]
             switch (field.type) {
@@ -67,6 +67,15 @@ export function ParamsForm({ effect, groups, targets, onChange }: Props) {
               case 'color':
                 return (
                   <ColorRow
+                    key={key}
+                    label={field.label}
+                    value={value as string}
+                    onChange={(v) => set(key, v as never)}
+                  />
+                )
+              case 'wheel':
+                return (
+                  <WheelRow
                     key={key}
                     label={field.label}
                     value={value as string}

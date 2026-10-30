@@ -8,6 +8,7 @@ import { z } from 'zod'
 export const GENERATORS = [
   'fire',
   'candle',
+  'static',
   'breathe',
   'aurora',
   'lightning',
@@ -19,6 +20,7 @@ export const GENERATORS = [
   'countdown',
   'orbit',
   'spot',
+  'rotate',
 ] as const
 export const Generator = z.enum(GENERATORS)
 export type Generator = z.infer<typeof Generator>
@@ -83,6 +85,10 @@ export const ParamsSchema = z
     // A target's ID (slug) the heads aim at.
     target: z.string().max(40).nullable(),
     radius: z.number().min(1).max(90),
+    // Gobo wheel slot a head projects; 0 is the open (solid) slot.
+    // Prism rotation from none (0) to the fastest the head can turn (1).
+    spin: Unit,
+    gobo: z.number().int().min(0).max(7),
     auto: z.boolean(),
     gapMin: z.number().min(0.5).max(300),
     gapMax: z.number().min(0.5).max(600),
@@ -124,6 +130,8 @@ const BASE: Params = {
   every: 4,
   target: null,
   radius: 20,
+  spin: 0.5,
+  gobo: 0,
   auto: false,
   gapMin: 6,
   gapMax: 20,
@@ -134,11 +142,12 @@ const BASE: Params = {
   clips: BOLT,
 }
 
-export type FieldFormat = 'pct' | 'x' | 's' | 'bpm' | 'hz' | 'deg' | 'n'
+export type FieldFormat = 'pct' | 'x' | 's' | 'bpm' | 'hz' | 'deg' | 'n' | 'max'
 export type Field =
   | { type: 'range'; label: string; min: number; max: number; step: number; format: FieldFormat }
   | { type: 'seg'; label: string; options: [string, string][] }
   | { type: 'color'; label: string }
+  | { type: 'wheel'; label: string }
   | { type: 'switch'; label: string }
   | { type: 'groups'; label: string }
   | { type: 'target'; label: string }
@@ -195,6 +204,8 @@ export const FIELDS: Partial<Record<keyof Params, Field>> = {
   every: range('Every', 1.5, 12, 0.1, 's'),
   target: { type: 'target', label: 'Aim at' },
   radius: range('Radius', 2, 60, 1, 'deg'),
+  spin: range('Speed', 0, 1, 0.01, 'max'),
+  gobo: range('Gobo', 0, 7, 1, 'n'),
   auto: { type: 'switch', label: 'Repeat at random' },
   gapMin: range('Shortest gap', 1, 60, 1, 's'),
   gapMax: range('Longest gap', 1, 120, 1, 's'),
@@ -221,6 +232,8 @@ export type GeneratorInfo = {
   once: boolean
   description: string
   defaults: Partial<Params>
+  // Fields that replace the shared ones for this generator.
+  fields?: Partial<Record<keyof Params, Field>>
   // Form sections in the order the inspector shows them.
   sections: [string, (keyof Params)[]][]
 }
@@ -255,15 +268,29 @@ export const GENERATOR_INFO: Record<Generator, GeneratorInfo> = {
       ['Color', ['color']],
     ],
   },
-  breathe: {
-    id: 'breathe',
-    name: 'Moonlit breathing',
+  static: {
+    id: 'static',
+    name: 'Static color',
     kind: 'Ambience',
     once: false,
-    description: 'Deep blue that swells and settles, rolling from the stage to the back.',
+    description: 'One steady color on the lights and moving heads, optionally aimed at a target.',
+    defaults: { color: '#ffffff', level: 1 },
+    sections: [
+      ['Where', ['groups', 'target']],
+      ['Level', ['level']],
+      ['Color', ['color']],
+    ],
+  },
+  breathe: {
+    id: 'breathe',
+    name: 'Breathing',
+    kind: 'Ambience',
+    once: false,
+    description:
+      'A color that swells and settles on the lights and moving heads, rolling from the stage to the back.',
     defaults: { color: '#2a4bd8', lo: 0.06, hi: 0.32 },
     sections: [
-      ['Where', ['groups']],
+      ['Where', ['groups', 'target']],
       ['Motion', ['period', 'ripple']],
       ['Level', ['lo', 'hi']],
       ['Color', ['color']],
@@ -402,6 +429,23 @@ export const GENERATOR_INFO: Record<Generator, GeneratorInfo> = {
     defaults: { color: '#e6ecff', level: 0.9 },
     sections: [
       ['Where', ['groups', 'target']],
+      ['Level', ['level']],
+      ['Color', ['color']],
+    ],
+  },
+  rotate: {
+    id: 'rotate',
+    name: 'Rotating',
+    kind: 'Moving head',
+    once: false,
+    description:
+      "Turns the heads' rotating prism and gobo at a speed you choose, with a color, optionally aimed at a target.",
+    defaults: { color: '#ffffff', level: 1 },
+    fields: { color: { type: 'wheel', label: 'Color' } },
+    sections: [
+      ['Where', ['groups', 'target']],
+      ['Motion', ['spin']],
+      ['Filter', ['gobo']],
       ['Level', ['level']],
       ['Color', ['color']],
     ],

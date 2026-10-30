@@ -20,6 +20,8 @@ import {
   strikeOrigin,
   TILT_RANGE,
   type Unit,
+  WHEEL_COLORS,
+  WHEEL_STEP,
 } from '@stagehand/shared'
 import { eq } from 'drizzle-orm'
 import { db } from './db'
@@ -417,6 +419,31 @@ function unitsOf(fx: FixtureRow[]): Unit[] {
 
 const byte = (v: number) => Math.round(clamp(v) * 255)
 
+// The wheel slot closest to a color, ignoring its brightness (the dimmer carries that).
+function wheelByte(c: [number, number, number]) {
+  const p = peak(c)
+  if (p <= 0) return 0
+  const n = c.map((v) => v / p)
+  let best = 0
+  let bestD = Number.POSITIVE_INFINITY
+  WHEEL_COLORS.forEach((w, slot) => {
+    const d = hexToRgb(w.hex).reduce((sum, v, i) => sum + (v - (n[i] ?? 0)) ** 2, 0)
+    if (d < bestD) {
+      best = slot
+      bestD = d
+    }
+  })
+  return best * WHEEL_STEP
+}
+
+// The rotating prism channel: 128 to 255 turns it from slow to fastest. Up to
+// 127 it stays still, and 0 is kept for "no prism", so a stopped rotation sends
+// a value in between. The ranges are assumed, not read from the manual.
+const PRISM_STILL = 64
+function prismByte(speed: number) {
+  return speed <= 0 ? PRISM_STILL : Math.round(128 + clamp(speed) * 127)
+}
+
 // A head's pan/tilt for an aim: the target's stored position plus the offset in degrees.
 function aimed(c: Cache, f: FixtureRow, aim: Aim) {
   const targetId = c.targetIds.get(aim.target)
@@ -445,8 +472,18 @@ function writeFrame(c: Cache, frame: Frame) {
     }
     const pt = out.aim ? aimed(c, f, out.aim) : null
     if (pt) dmxOutput.set(f.address, [...coarseFine(pt.pan), ...coarseFine(pt.tilt)])
-    // Speed fastest, dimmer from the color, shutter open, wheel/gobo/prism/control off.
-    dmxOutput.set(f.address + 4, [0, byte(peak(out.c)), 0, 0, 0, 0, 0])
+    // Speed fastest, dimmer from the color's brightness, shutter open, color wheel
+    // from its hue, control off.
+    // Gobo slots sit every 8 DMX values on the wheel; no gobo means the open slot.
+    dmxOutput.set(f.address + 4, [
+      0,
+      byte(peak(out.c)),
+      0,
+      wheelByte(out.c),
+      (out.gobo ?? 0) * 8,
+      out.prism === undefined ? 0 : prismByte(out.prism),
+      0,
+    ])
   }
 }
 

@@ -1,4 +1,4 @@
-import type { Field as FieldDef } from '@stagehand/shared'
+import { type Field as FieldDef, WHEEL_COLORS } from '@stagehand/shared'
 import { cn } from 'cn'
 import { useEffect, useRef } from 'react'
 import { Field } from '@/components/shell/panel'
@@ -19,6 +19,8 @@ export function formatValue(format: Format, v: number) {
       return `${Math.round(v)} bpm`
     case 'hz':
       return `${v.toFixed(2)} Hz`
+    case 'max':
+      return v >= 1 ? 'MAX' : `${v.toFixed(2)}×`
     case 'deg':
       return `${Math.round(v)}°`
     default:
@@ -80,6 +82,41 @@ export function ColorRow({
           className="h-6 w-10 cursor-pointer rounded border-0 bg-transparent p-0"
         />
         <span className="font-mono text-[11px] text-muted-foreground">{value}</span>
+      </span>
+    </Field>
+  )
+}
+
+// A choice among the moving heads' fixed wheel colors.
+export function WheelRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+}) {
+  // A color saved before the wheel picker shows the closest slot as chosen.
+  const chosen = WHEEL_COLORS.find((c) => c.hex === value.toLowerCase())
+  return (
+    <Field label={label}>
+      <span className="flex flex-wrap items-center gap-1.5">
+        {WHEEL_COLORS.map((c) => (
+          <button
+            key={c.hex}
+            type="button"
+            aria-pressed={chosen?.hex === c.hex}
+            aria-label={c.name}
+            title={c.name}
+            onClick={() => onChange(c.hex)}
+            style={{ backgroundColor: c.hex }}
+            className={cn(
+              'size-5 rounded-full outline-none ring-offset-1 ring-offset-background',
+              chosen?.hex === c.hex ? 'ring-2 ring-foreground' : 'ring-1 ring-border',
+            )}
+          />
+        ))}
       </span>
     </Field>
   )

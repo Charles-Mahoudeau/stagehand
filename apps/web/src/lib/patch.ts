@@ -1,4 +1,10 @@
-import { channelCount, FIXTURE_PROFILES, type FixtureType } from '@stagehand/shared'
+import {
+  channelCount,
+  FIXTURE_PROFILES,
+  type FixtureType,
+  WHEEL_COLORS,
+  WHEEL_STEP,
+} from '@stagehand/shared'
 import type { Fixture } from '@/lib/rooms'
 
 // Helpers for reading a room's patch: which channels each fixture uses, which
@@ -85,19 +91,6 @@ export function nextName(fixtures: Fixture[]) {
   return `Fixture ${n}`
 }
 
-// The wheel colors in slot order, matching the evenly spaced slots the
-// server's identify steps through.
-const WHEEL = [
-  '#ffffff',
-  '#ff3b3b',
-  '#3c6eff',
-  '#46dc78',
-  '#ffd23c',
-  '#e040e0',
-  '#40e0e0',
-  '#ff8c28',
-]
-
 // What a fixture is putting out, as a CSS color, or null when dark.
 export function outputColor(f: Fixture, channels: number[] | null | undefined): string | null {
   if (!channels) return null
@@ -115,7 +108,9 @@ export function outputColor(f: Fixture, channels: number[] | null | undefined): 
   }
   const dimmer = at(5)
   if (dimmer === 0) return null
-  const wheel = WHEEL[Math.min(WHEEL.length - 1, Math.floor(at(7) / 16))] ?? '#ffffff'
+  const wheel =
+    WHEEL_COLORS[Math.min(WHEEL_COLORS.length - 1, Math.floor(at(7) / WHEEL_STEP))]?.hex ??
+    '#ffffff'
   const alpha = 0.35 + (0.65 * dimmer) / 255
   return `color-mix(in srgb, ${wheel} ${Math.round(alpha * 100)}%, transparent)`
 }

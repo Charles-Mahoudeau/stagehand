@@ -20,7 +20,9 @@ export type Unit = {
 // Where a head should point: a target's stored position, nudged by degrees.
 export type Aim = { target: string; dPan: number; dTilt: number }
 
-export type UnitOut = { c: RGB; aim: Aim | null }
+// `gobo` is a gobo wheel slot for a head; undefined leaves the wheel alone.
+// `prism` is the rotating prism's speed from 0 (not turning) to 1 (the head's fastest).
+export type UnitOut = { c: RGB; aim: Aim | null; gobo?: number; prism?: number }
 export type Frame = Map<number, UnitOut>
 
 // One firing of a one-shot. `ox` is where it starts across the room, 0 to 1.
@@ -131,6 +133,8 @@ export function addFrame(dst: Frame, src: Frame, opacity = 1) {
       Math.min(1, d.c[2] + s.c[2] * opacity),
     ]
     if (s.aim) d.aim = s.aim
+    if (s.gobo !== undefined) d.gobo = s.gobo
+    if (s.prism !== undefined) d.prism = s.prism
   }
 }
 
@@ -144,10 +148,15 @@ export function mixFrames(units: Unit[], a: Frame, b: Frame, k: number): Frame {
     out.set(u.address, {
       c: mix(x?.c ?? BLACK, y?.c ?? BLACK, k),
       aim: (k >= 0.5 ? (y?.aim ?? x?.aim) : (x?.aim ?? y?.aim)) ?? null,
+      gobo: k >= 0.5 ? (y?.gobo ?? x?.gobo) : (x?.gobo ?? y?.gobo),
+      prism: k >= 0.5 ? (y?.prism ?? x?.prism) : (x?.prism ?? y?.prism),
     })
   }
   return out
 }
+
+const everyone = (units: Unit[], p: Params) =>
+  units.filter((u) => p.groups.length === 0 || p.groups.includes(u.address))
 
 const targets = (units: Unit[], p: Params, wantMovers: boolean) =>
   units.filter(
@@ -176,11 +185,7 @@ function orderOf(u: Unit, mode: Params['mode'], index: number): number {
 export const isSpreadMode = (m: string): m is Params['mode'] =>
   (SPREAD_MODES as readonly string[]).includes(m)
 
-function each(
-  list: Unit[],
-  units: Unit[],
-  f: (u: Unit, s: number) => RGB | { c: RGB; aim: Aim | null },
-): Frame {
+function each(list: Unit[], units: Unit[], f: (u: Unit, s: number) => RGB | UnitOut): Frame {
   const out: Frame = new Map()
   for (const u of list) {
     const r = f(u, units.indexOf(u))
@@ -267,10 +272,18 @@ export function evalEffect(
         )
         return scale(hexToRgb(p.color), i * p.hi)
       })
+    case 'static':
+      return each(everyone(units, p), units, (u) => ({
+        c: scale(hexToRgb(p.color), p.level),
+        aim: u.mover && p.target ? { target: p.target, dPan: 0, dTilt: 0 } : null,
+      }))
     case 'breathe':
-      return each(pars(), units, (u) => {
+      return each(everyone(units, p), units, (u) => {
         const v = 0.5 + 0.5 * Math.sin((t * Math.PI * 2) / p.period - u.y * p.ripple)
-        return scale(hexToRgb(p.color), lerp(p.lo, p.hi, v))
+        return {
+          c: scale(hexToRgb(p.color), lerp(p.lo, p.hi, v)),
+          aim: u.mover && p.target ? { target: p.target, dPan: 0, dTilt: 0 } : null,
+        }
       })
     case 'aurora':
       return each(pars(), units, (_u, s) => {
@@ -328,6 +341,13 @@ export function evalEffect(
         return { c: scale(hexToRgb(p.color), p.level), aim }
       })
     }
+    case 'rotate':
+      return each(heads(), units, () => ({
+        c: scale(hexToRgb(p.color), p.level),
+        aim: p.target ? { target: p.target, dPan: 0, dTilt: 0 } : null,
+        gobo: p.gobo,
+        prism: p.spin,
+      }))
     case 'spot':
       return each(heads(), units, () => ({
         c: scale(hexToRgb(p.color), p.level * (0.9 + 0.1 * Math.sin(t * 2))),
