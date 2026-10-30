@@ -15,6 +15,8 @@ type Props = {
   fixtures: Fixture[]
   // Whether the room is driven; otherwise fixtures are drawn dark.
   live: boolean
+  // The room's width over its depth; the plan is square-ish filling its box when omitted.
+  aspect?: number
   selectedId?: number
   // Fixtures drawn at full strength; the others are dimmed. All when omitted.
   highlight?: Set<number>
@@ -38,6 +40,7 @@ const snap = (v: number) => Math.round(Math.min(1, Math.max(0, v)) / STEP) * STE
 export function StagePlan({
   fixtures,
   live,
+  aspect,
   selectedId,
   highlight,
   onSelect,
@@ -110,110 +113,124 @@ export function StagePlan({
         STAGE
       </span>
       <div className={cn('absolute inset-x-0 h-px bg-surface-3', lg ? 'top-[52px]' : 'top-9')} />
-      {/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: a pointer shortcut; markers and fixtures stay keyboard-reachable */}
       <div
-        ref={area}
-        onClick={(e) => {
-          if (!onFloorClick || (e.target as Element).closest('button')) return
-          const position = pointerPosition(e)
-          if (position) onFloorClick(position)
-        }}
         className={cn(
-          'absolute',
-          onFloorClick && 'cursor-crosshair',
-          lg
-            ? 'inset-[68px_40px_40px_40px] bg-[linear-gradient(#141414_1px,transparent_1px),linear-gradient(90deg,#141414_1px,transparent_1px)] bg-size-[10%_10%]'
-            : 'inset-[52px_24px_24px_24px]',
+          'absolute flex items-center justify-center @container-[size]',
+          lg ? 'inset-[68px_40px_40px_40px]' : 'inset-[52px_24px_24px_24px]',
         )}
       >
-        {lg && selectedPos && (
-          <>
-            <div
-              className="absolute inset-x-0 border-t border-dashed border-input"
-              style={{ top: `${selectedPos.y * 100}%` }}
-            />
-            <div
-              className="absolute inset-y-0 border-l border-dashed border-input"
-              style={{ left: `${selectedPos.x * 100}%` }}
-            />
-          </>
-        )}
-        {placed.map((f) => {
-          const pos = positionOf(f) as Position
-          const color = outputColor(f, channels)
-          const dim = highlight && !highlight.has(f.id)
-          const head = f.type === 'moving_head'
-          const dot = lg ? (head ? 18 : 14) : head ? 12 : 10
-          return (
-            <div
-              key={f.id}
-              className={cn('absolute size-0', dim && 'opacity-30')}
-              style={{ left: `${pos.x * 100}%`, top: `${pos.y * 100}%` }}
-            >
-              {color && (
-                <span
-                  className="pointer-events-none absolute rounded-full"
-                  style={{
-                    inset: lg ? -50 : -30,
-                    background: `radial-gradient(circle, color-mix(in srgb, ${color} 45%, transparent) 0%, transparent 70%)`,
-                  }}
-                />
-              )}
-              {/* The button is a 40px target around the smaller dot. */}
-              <button
-                type="button"
-                aria-label={`${f.name}, DMX ${f.address}`}
-                aria-pressed={f.id === selectedId}
-                onClick={() => onSelect?.(f.id)}
-                onPointerDown={onPointerDown(f)}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                onPointerCancel={() => setDrag(null)}
-                onKeyDown={onKeyDown(f)}
-                className={cn(
-                  'absolute flex -translate-1/2 touch-none items-center justify-center rounded-full border-0 bg-transparent p-0',
-                  lg ? 'size-10' : 'size-7',
-                  onMove ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
-                )}
+        {/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: a pointer shortcut; markers and fixtures stay keyboard-reachable */}
+        <div
+          ref={area}
+          onClick={(e) => {
+            if (!onFloorClick || (e.target as Element).closest('button')) return
+            const position = pointerPosition(e)
+            if (position) onFloorClick(position)
+          }}
+          style={
+            aspect
+              ? {
+                  width: `min(100cqw, 100cqh * ${aspect})`,
+                  height: `min(100cqh, 100cqw / ${aspect})`,
+                }
+              : { width: '100%', height: '100%' }
+          }
+          className={cn(
+            'relative shrink-0',
+            onFloorClick && 'cursor-crosshair',
+            lg &&
+              'bg-[linear-gradient(#141414_1px,transparent_1px),linear-gradient(90deg,#141414_1px,transparent_1px)] bg-size-[10%_10%]',
+          )}
+        >
+          {lg && selectedPos && (
+            <>
+              <div
+                className="absolute inset-x-0 border-t border-dashed border-input"
+                style={{ top: `${selectedPos.y * 100}%` }}
+              />
+              <div
+                className="absolute inset-y-0 border-l border-dashed border-input"
+                style={{ left: `${selectedPos.x * 100}%` }}
+              />
+            </>
+          )}
+          {placed.map((f) => {
+            const pos = positionOf(f) as Position
+            const color = outputColor(f, channels)
+            const dim = highlight && !highlight.has(f.id)
+            const head = f.type === 'moving_head'
+            const dot = lg ? (head ? 18 : 14) : head ? 12 : 10
+            return (
+              <div
+                key={f.id}
+                className={cn('absolute size-0', dim && 'opacity-30')}
+                style={{ left: `${pos.x * 100}%`, top: `${pos.y * 100}%` }}
               >
-                <span
+                {color && (
+                  <span
+                    className="pointer-events-none absolute rounded-full"
+                    style={{
+                      inset: lg ? -50 : -30,
+                      background: `radial-gradient(circle, color-mix(in srgb, ${color} 45%, transparent) 0%, transparent 70%)`,
+                    }}
+                  />
+                )}
+                {/* The button is a 40px target around the smaller dot. */}
+                <button
+                  type="button"
+                  aria-label={`${f.name}, DMX ${f.address}`}
+                  aria-pressed={f.id === selectedId}
+                  onClick={() => onSelect?.(f.id)}
+                  onPointerDown={onPointerDown(f)}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                  onPointerCancel={() => setDrag(null)}
+                  onKeyDown={onKeyDown(f)}
                   className={cn(
-                    head ? 'rounded-md' : 'rounded-full',
-                    f.id === selectedId
-                      ? 'shadow-select'
-                      : linked.has(f.id) &&
-                          'shadow-[0_0_0_3px_var(--background),0_0_0_4px_var(--text-muted)]',
-                    !color && f.id !== selectedId && 'shadow-[inset_0_0_0_1.5px_var(--off-ring)]',
-                  )}
-                  style={{ width: dot, height: dot, background: color ?? 'var(--surface-2)' }}
-                />
-              </button>
-              {lg && (
-                <span
-                  className={cn(
-                    'pointer-events-none absolute top-[-7px] left-3.5 font-mono text-[10px] whitespace-nowrap',
-                    f.id === selectedId ? 'text-foreground' : 'text-muted-foreground',
+                    'absolute flex -translate-1/2 touch-none items-center justify-center rounded-full border-0 bg-transparent p-0',
+                    lg ? 'size-10' : 'size-7',
+                    onMove ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
                   )}
                 >
-                  {f.name}
-                </span>
-              )}
-            </div>
-          )
-        })}
-        {lg && selectedPos && (
-          <span
-            className="pointer-events-none absolute rounded-md bg-surface-3 px-1.5 py-0.5 font-mono text-[11px] whitespace-nowrap"
-            style={{
-              left: `${selectedPos.x * 100}%`,
-              top: `${selectedPos.y * 100}%`,
-              transform: `translate(${selectedPos.x > 0.7 ? 'calc(-100% - 14px)' : '14px'}, 12px)`,
-            }}
-          >
-            {selectedPos.x.toFixed(2)}, {selectedPos.y.toFixed(2)}
-          </span>
-        )}
-        {overlay?.(pointerPosition)}
+                  <span
+                    className={cn(
+                      head ? 'rounded-md' : 'rounded-full',
+                      f.id === selectedId
+                        ? 'shadow-select'
+                        : linked.has(f.id) &&
+                            'shadow-[0_0_0_3px_var(--background),0_0_0_4px_var(--text-muted)]',
+                      !color && f.id !== selectedId && 'shadow-[inset_0_0_0_1.5px_var(--off-ring)]',
+                    )}
+                    style={{ width: dot, height: dot, background: color ?? 'var(--surface-2)' }}
+                  />
+                </button>
+                {lg && (
+                  <span
+                    className={cn(
+                      'pointer-events-none absolute top-[-7px] left-3.5 font-mono text-[10px] whitespace-nowrap',
+                      f.id === selectedId ? 'text-foreground' : 'text-muted-foreground',
+                    )}
+                  >
+                    {f.name}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+          {lg && selectedPos && (
+            <span
+              className="pointer-events-none absolute rounded-md bg-surface-3 px-1.5 py-0.5 font-mono text-[11px] whitespace-nowrap"
+              style={{
+                left: `${selectedPos.x * 100}%`,
+                top: `${selectedPos.y * 100}%`,
+                transform: `translate(${selectedPos.x > 0.7 ? 'calc(-100% - 14px)' : '14px'}, 12px)`,
+              }}
+            >
+              {selectedPos.x.toFixed(2)}, {selectedPos.y.toFixed(2)}
+            </span>
+          )}
+          {overlay?.(pointerPosition)}
+        </div>
       </div>
       {lg && unplaced.length > 0 && (
         <div className="absolute inset-x-4 bottom-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">

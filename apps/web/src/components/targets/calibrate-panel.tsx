@@ -8,7 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { useLive } from '@/lib/live'
 import { outputColor } from '@/lib/patch'
-import { type Fixture, type Room, useFixtureMutations, useRoomMutations } from '@/lib/rooms'
+import {
+  type Fixture,
+  type Room,
+  roomAspect,
+  useFixtureMutations,
+  useRoomMutations,
+} from '@/lib/rooms'
 import {
   aim,
   type CalibrationPoint,
@@ -167,6 +173,7 @@ export function CalibratePanel(props: Props) {
           className="min-h-[560px] flex-1"
           fixtures={fixtures}
           live={room.active}
+          aspect={roomAspect(room)}
           highlight={new Set(head ? [head.id] : [])}
           onFloorClick={
             wizard.running

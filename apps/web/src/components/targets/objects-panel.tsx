@@ -6,7 +6,7 @@ import { CommitInput } from '@/components/configure/commit-input'
 import { StagePlan } from '@/components/configure/stage-plan'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import type { Fixture, Room } from '@/lib/rooms'
+import { type Fixture, type Room, roomAspect } from '@/lib/rooms'
 import {
   aim,
   type CalibrationPoint,
@@ -108,6 +108,7 @@ export function ObjectsPanel(props: Props) {
           className="min-h-[560px] flex-1"
           fixtures={fixtures}
           live={room.active}
+          aspect={roomAspect(room)}
           highlight={new Set(heads.map((h) => h.id))}
           overlay={(toPosition) => (
             <>

@@ -9,7 +9,7 @@ import {
   typeLabel,
   UNIVERSE,
 } from '@/lib/patch'
-import { useFixtureMutations } from '@/lib/rooms'
+import { roomAspect, useFixtureMutations } from '@/lib/rooms'
 import { FixtureInspector } from './fixture-inspector'
 import { useAddFixture, type ViewProps } from './shared'
 import { StagePlan } from './stage-plan'
@@ -30,6 +30,7 @@ export function PlanView(props: ViewProps) {
           className="min-h-[520px] flex-1"
           fixtures={fixtures}
           live={room.active}
+          aspect={roomAspect(room)}
           selectedId={selected?.id}
           onSelect={onSelect}
           onMove={(id, position) => update.mutateAsync({ id, position })}

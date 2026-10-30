@@ -14,7 +14,7 @@ import {
   typeLabel,
   UNIVERSE,
 } from '@/lib/patch'
-import { type Fixture, useFixtureMutations } from '@/lib/rooms'
+import { type Fixture, roomAspect, useFixtureMutations } from '@/lib/rooms'
 import { CommitInput } from './commit-input'
 import { IdentifyButton } from './identify-button'
 import { useAddFixture, type ViewProps } from './shared'
@@ -112,6 +112,7 @@ export function SheetView(props: ViewProps) {
           className="h-[340px]"
           fixtures={fixtures}
           live={room.active}
+          aspect={roomAspect(room)}
           selectedId={selected?.id}
           onSelect={onSelect}
           onMove={(id, position) => update.mutateAsync({ id, position })}

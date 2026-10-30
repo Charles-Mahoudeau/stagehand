@@ -13,7 +13,7 @@ import {
   rangeLabel,
   UNIVERSE,
 } from '@/lib/patch'
-import { useFixtureMutations } from '@/lib/rooms'
+import { roomAspect, useFixtureMutations } from '@/lib/rooms'
 import { Fader } from './fader'
 import { useAddFixture, type ViewProps } from './shared'
 import { StagePlan } from './stage-plan'
@@ -311,6 +311,7 @@ function AddressPanel({
         className="h-[200px] rounded-xl"
         fixtures={fixtures}
         live={room.active}
+        aspect={roomAspect(room)}
         selectedId={selected?.id}
         highlight={ids}
         onSelect={onSelect}

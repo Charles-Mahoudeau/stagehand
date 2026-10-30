@@ -151,3 +151,7 @@ export async function stopIdentify(roomId: number, fixtureId: number) {
   const param = { roomId: String(roomId), fixtureId: String(fixtureId) }
   await api.rooms[':roomId'].fixtures[':fixtureId'].identify.$delete({ param })
 }
+
+// Width over depth, once both are measured; the plan is drawn to this shape.
+export const roomAspect = (room: Room) =>
+  room.width && room.depth ? room.width / room.depth : undefined
