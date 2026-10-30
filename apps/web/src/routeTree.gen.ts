@@ -13,7 +13,9 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedConfigureRouteImport } from './routes/_authed/configure'
+import { Route as AuthedEffectsRouteImport } from './routes/_authed/effects'
 import { Route as AuthedPerformRouteImport } from './routes/_authed/perform'
+import { Route as AuthedScenesRouteImport } from './routes/_authed/scenes'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
@@ -34,9 +36,19 @@ const AuthedConfigureRoute = AuthedConfigureRouteImport.update({
   path: '/configure',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedEffectsRoute = AuthedEffectsRouteImport.update({
+  id: '/effects',
+  path: '/effects',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedPerformRoute = AuthedPerformRouteImport.update({
   id: '/perform',
   path: '/perform',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedScenesRoute = AuthedScenesRouteImport.update({
+  id: '/scenes',
+  path: '/scenes',
   getParentRoute: () => AuthedRoute,
 } as any)
 
@@ -44,12 +56,16 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
   '/login': typeof LoginRoute
   '/configure': typeof AuthedConfigureRoute
+  '/effects': typeof AuthedEffectsRoute
   '/perform': typeof AuthedPerformRoute
+  '/scenes': typeof AuthedScenesRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/configure': typeof AuthedConfigureRoute
+  '/effects': typeof AuthedEffectsRoute
   '/perform': typeof AuthedPerformRoute
+  '/scenes': typeof AuthedScenesRoute
   '/': typeof AuthedIndexRoute
 }
 export interface FileRoutesById {
@@ -57,20 +73,24 @@ export interface FileRoutesById {
   '/_authed': typeof AuthedRouteWithChildren
   '/login': typeof LoginRoute
   '/_authed/configure': typeof AuthedConfigureRoute
+  '/_authed/effects': typeof AuthedEffectsRoute
   '/_authed/perform': typeof AuthedPerformRoute
+  '/_authed/scenes': typeof AuthedScenesRoute
   '/_authed/': typeof AuthedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/configure' | '/perform'
+  fullPaths: '/' | '/login' | '/configure' | '/effects' | '/perform' | '/scenes'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/configure' | '/perform' | '/'
+  to: '/login' | '/configure' | '/effects' | '/perform' | '/scenes' | '/'
   id:
     | '__root__'
     | '/_authed'
     | '/login'
     | '/_authed/configure'
+    | '/_authed/effects'
     | '/_authed/perform'
+    | '/_authed/scenes'
     | '/_authed/'
   fileRoutesById: FileRoutesById
 }
@@ -109,6 +129,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedConfigureRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/effects': {
+      id: '/_authed/effects'
+      path: '/effects'
+      fullPath: '/effects'
+      preLoaderRoute: typeof AuthedEffectsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/perform': {
       id: '/_authed/perform'
       path: '/perform'
@@ -116,18 +143,29 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedPerformRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/scenes': {
+      id: '/_authed/scenes'
+      path: '/scenes'
+      fullPath: '/scenes'
+      preLoaderRoute: typeof AuthedScenesRouteImport
+      parentRoute: typeof AuthedRoute
+    }
   }
 }
 
 interface AuthedRouteChildren {
   AuthedConfigureRoute: typeof AuthedConfigureRoute
+  AuthedEffectsRoute: typeof AuthedEffectsRoute
   AuthedPerformRoute: typeof AuthedPerformRoute
+  AuthedScenesRoute: typeof AuthedScenesRoute
   AuthedIndexRoute: typeof AuthedIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedConfigureRoute: AuthedConfigureRoute,
+  AuthedEffectsRoute: AuthedEffectsRoute,
   AuthedPerformRoute: AuthedPerformRoute,
+  AuthedScenesRoute: AuthedScenesRoute,
   AuthedIndexRoute: AuthedIndexRoute,
 }
 

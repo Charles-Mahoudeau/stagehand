@@ -7,8 +7,6 @@ import { Button } from '@/components/ui/button'
 import { api, sessionQuery } from '@/lib/api'
 import { useLive } from '@/lib/live'
 
-const SOON = ['Effects', 'Scenes']
-
 type Density = 'compact' | 'touch'
 
 type Props = {
@@ -51,14 +49,14 @@ function TopBar({ room, nav, touch }: { room?: ReactNode; nav?: ReactNode; touch
   }
   const mode = cn(
     'flex items-center rounded-md text-muted-foreground data-[status=active]:bg-primary data-[status=active]:font-semibold data-[status=active]:text-primary-foreground',
-    touch ? 'h-10 px-[18px] text-sm' : 'h-7 px-3.5 text-[13px]',
+    touch ? 'h-8 px-4 text-sm' : 'h-7 px-3.5 text-[13px]',
   )
 
   return (
     <header
       className={cn(
         'flex shrink-0 items-center gap-2 border-b border-border-subtle bg-surface-0 px-2.5',
-        touch ? 'h-[52px]' : 'h-10',
+        'h-10',
       )}
     >
       <span className="pr-2.5 text-sm font-semibold">Stagehand</span>
@@ -66,16 +64,12 @@ function TopBar({ room, nav, touch }: { room?: ReactNode; nav?: ReactNode; touch
         <Link to="/configure" className={mode}>
           Configure
         </Link>
-        {SOON.map((label) => (
-          <span
-            key={label}
-            aria-disabled="true"
-            title="Coming soon"
-            className={cn(mode, 'cursor-not-allowed text-muted-foreground/45')}
-          >
-            {label}
-          </span>
-        ))}
+        <Link to="/effects" className={mode}>
+          Effects
+        </Link>
+        <Link to="/scenes" className={mode}>
+          Scenes
+        </Link>
         <Link to="/perform" className={mode}>
           Perform
         </Link>
@@ -91,8 +85,8 @@ function TopBar({ room, nav, touch }: { room?: ReactNode; nav?: ReactNode; touch
       <DmxStatus />
       <Button
         variant="outline"
-        size={touch ? 'default' : 'xs'}
-        className={cn(!touch && 'h-7')}
+        size={touch ? 'sm' : 'xs'}
+        className={touch ? 'h-9' : 'h-7'}
         onClick={() => api.dmx.blackout.$post()}
       >
         Blackout

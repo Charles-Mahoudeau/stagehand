@@ -1,4 +1,4 @@
-import type { ServerMessage } from '@stagehand/shared'
+import type { PlaybackState, ServerMessage } from '@stagehand/shared'
 import { useQueryClient } from '@tanstack/react-query'
 import { createContext, type ReactNode, useContext, useState } from 'react'
 import { type SocketStatus, useSocket } from '@/lib/ws'
@@ -11,6 +11,8 @@ type Live = {
   dmx: DmxState | null
   // The fixture running the identify rainbow, if any.
   identifying: number | null
+  // What the cue list is playing; null until the server says.
+  playback: PlaybackState | null
   // Sets consecutive channels from `start` (1-based) over the socket.
   setChannels: (start: number, values: number[]) => void
 }
@@ -24,6 +26,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
   const [dmx, setDmx] = useState<DmxState | null>(null)
   const [identifying, setIdentifying] = useState<number | null>(null)
+  const [playback, setPlayback] = useState<PlaybackState | null>(null)
 
   const socket = useSocket((msg) => {
     switch (msg.type) {
@@ -35,6 +38,18 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         break
       case 'targets.changed':
         void queryClient.invalidateQueries({ queryKey: ['rooms', msg.roomId, 'targets'] })
+        break
+      case 'effects.changed':
+        void queryClient.invalidateQueries({ queryKey: ['rooms', msg.roomId, 'effects'] })
+        break
+      case 'scenes.changed':
+        void queryClient.invalidateQueries({ queryKey: ['rooms', msg.roomId, 'scenes'] })
+        break
+      case 'cues.changed':
+        void queryClient.invalidateQueries({ queryKey: ['rooms', msg.roomId, 'cues'] })
+        break
+      case 'playback.state':
+        setPlayback(msg.state)
         break
       case 'dmx.state': {
         const { type: _, ...state } = msg
@@ -52,7 +67,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <LiveContext value={{ socket: socket.status, dmx, identifying, setChannels }}>
+    <LiveContext value={{ socket: socket.status, dmx, identifying, playback, setChannels }}>
       {children}
     </LiveContext>
   )

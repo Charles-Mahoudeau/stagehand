@@ -3,9 +3,11 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { cn } from 'cn'
 import { useState } from 'react'
+import { z } from 'zod'
 import { AppShell } from '@/components/app-shell'
 import { Fader } from '@/components/configure/fader'
 import { StagePlan } from '@/components/configure/stage-plan'
+import { CueBoard } from '@/components/perform/cue-board'
 import {
   Panel,
   PanelBody,
@@ -28,18 +30,44 @@ import {
   targetsQuery,
 } from '@/lib/targets'
 
+const VIEWS = { cues: 'Cues', aim: 'Aim' } as const
+
 export const Route = createFileRoute('/_authed/perform')({
+  validateSearch: z.object({ view: z.enum(['cues', 'aim']).optional().catch(undefined) }),
   component: PerformPage,
 })
 
 function PerformPage() {
   const rooms = useQuery(roomsQuery)
   const room = rooms.data?.find((r) => r.active)
+  const view = Route.useSearch().view ?? 'cues'
 
   return (
-    <AppShell density="touch" status={room && <span>Room: {room.name}</span>}>
+    <AppShell
+      density="touch"
+      nav={
+        <nav aria-label="Perform views" className="flex gap-1">
+          {Object.entries(VIEWS).map(([key, label]) => (
+            <Link
+              key={key}
+              from={Route.fullPath}
+              search={{ view: key === 'cues' ? undefined : (key as keyof typeof VIEWS) }}
+              activeOptions={{ includeSearch: true, explicitUndefined: true }}
+              className="flex h-8 items-center rounded-md px-4 text-sm text-muted-foreground data-[status=active]:bg-surface-3 data-[status=active]:text-foreground"
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
+      }
+      status={room && <span>Room: {room.name}</span>}
+    >
       {room ? (
-        <AimBoard room={room} />
+        view === 'aim' ? (
+          <AimBoard room={room} />
+        ) : (
+          <CueBoard room={room} />
+        )
       ) : (
         rooms.isSuccess && (
           <p className="m-auto text-sm text-muted-foreground">
