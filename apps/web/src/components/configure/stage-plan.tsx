@@ -1,5 +1,12 @@
 import { cn } from 'cn'
-import { type KeyboardEvent, type PointerEvent, useRef, useState } from 'react'
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+  type ReactNode,
+  useRef,
+  useState,
+} from 'react'
 import { useLive } from '@/lib/live'
 import { outputColor } from '@/lib/patch'
 import type { Fixture, Position } from '@/lib/rooms'
@@ -16,6 +23,11 @@ type Props = {
   onMove?: (id: number, position: Position) => Promise<unknown>
   size?: 'lg' | 'sm'
   className?: string
+  // Drawn over the fixtures, in the same box. Gets the conversion from a
+  // pointer event to plan coordinates, for markers of its own.
+  overlay?: (toPosition: (e: MouseEvent) => Position | null) => ReactNode
+  // A click on the plan (not on a fixture), in plan coordinates.
+  onFloorClick?: (position: Position) => void
 }
 
 const STEP = 0.01
@@ -32,6 +44,8 @@ export function StagePlan({
   onMove,
   size = 'lg',
   className,
+  overlay,
+  onFloorClick,
 }: Props) {
   const { dmx } = useLive()
   const area = useRef<HTMLDivElement>(null)
@@ -43,7 +57,7 @@ export function StagePlan({
     fixtures.filter((f) => f.address === selected?.address && f.id !== selectedId).map((f) => f.id),
   )
 
-  const pointerPosition = (e: PointerEvent): Position | null => {
+  const pointerPosition = (e: MouseEvent): Position | null => {
     const rect = area.current?.getBoundingClientRect()
     if (!rect) return null
     return {
@@ -96,10 +110,17 @@ export function StagePlan({
         STAGE
       </span>
       <div className={cn('absolute inset-x-0 h-px bg-surface-3', lg ? 'top-[52px]' : 'top-9')} />
+      {/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: a pointer shortcut; markers and fixtures stay keyboard-reachable */}
       <div
         ref={area}
+        onClick={(e) => {
+          if (!onFloorClick || (e.target as Element).closest('button')) return
+          const position = pointerPosition(e)
+          if (position) onFloorClick(position)
+        }}
         className={cn(
           'absolute',
+          onFloorClick && 'cursor-crosshair',
           lg
             ? 'inset-[68px_40px_40px_40px] bg-[linear-gradient(#141414_1px,transparent_1px),linear-gradient(90deg,#141414_1px,transparent_1px)] bg-size-[10%_10%]'
             : 'inset-[52px_24px_24px_24px]',
@@ -192,6 +213,7 @@ export function StagePlan({
             {selectedPos.x.toFixed(2)}, {selectedPos.y.toFixed(2)}
           </span>
         )}
+        {overlay?.(pointerPosition)}
       </div>
       {lg && unplaced.length > 0 && (
         <div className="absolute inset-x-4 bottom-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">

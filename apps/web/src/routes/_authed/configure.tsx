@@ -8,6 +8,7 @@ import type { ViewProps } from '@/components/configure/shared'
 import { SheetView } from '@/components/configure/sheet-view'
 import { UniverseView } from '@/components/configure/universe-view'
 import { RoomMenu } from '@/components/room-menu'
+import { TargetsView } from '@/components/targets/targets-view'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,13 +16,18 @@ import { useLive } from '@/lib/live'
 import { findOverlaps, overlappingIds } from '@/lib/patch'
 import { fixturesQuery, roomsQuery, stopIdentify, useRoomMutations } from '@/lib/rooms'
 
-const VIEWS = { plan: 'Plan', sheet: 'Sheet', universe: 'Universe' } as const
+const VIEWS = { plan: 'Plan', sheet: 'Sheet', universe: 'Universe', targets: 'Targets' } as const
 
 export const Route = createFileRoute('/_authed/configure')({
   validateSearch: z.object({
-    view: z.enum(['plan', 'sheet', 'universe']).optional(),
+    view: z.enum(['plan', 'sheet', 'universe', 'targets']).optional(),
     room: z.number().int().optional(),
     fixture: z.number().int().optional(),
+    // Targets view: calibrating rather than placing objects, and what is picked.
+    mode: z.enum(['calibrate']).optional(),
+    target: z.number().int().optional(),
+    head: z.number().int().optional(),
+    point: z.number().int().optional(),
   }),
   component: ConfigurePage,
 })
@@ -53,7 +59,16 @@ function ConfigurePage() {
               rooms={rooms.data}
               room={room}
               onSelect={(id) =>
-                navigate({ search: (s) => ({ ...s, room: id, fixture: undefined }) })
+                navigate({
+                  search: (s) => ({
+                    ...s,
+                    room: id,
+                    fixture: undefined,
+                    target: undefined,
+                    head: undefined,
+                    point: undefined,
+                  }),
+                })
               }
             />
           )
@@ -114,6 +129,7 @@ function ConfigurePage() {
 function ConfigureView({ view, ...props }: ViewProps & { view: keyof typeof VIEWS }) {
   if (view === 'sheet') return <SheetView {...props} />
   if (view === 'universe') return <UniverseView {...props} />
+  if (view === 'targets') return <TargetsView {...props} />
   return <PlanView {...props} />
 }
 

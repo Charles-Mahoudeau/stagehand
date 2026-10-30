@@ -6,7 +6,10 @@ import { Button } from '@/components/ui/button'
 import { api, sessionQuery } from '@/lib/api'
 import { useLive } from '@/lib/live'
 
-const SOON = ['Effects', 'Scenes', 'Perform']
+const SOON = ['Effects', 'Scenes']
+
+const TAB =
+  'rounded-[9px] px-[18px] py-2.5 text-muted-foreground data-[status=active]:bg-primary data-[status=active]:font-semibold data-[status=active]:text-primary-foreground'
 
 // Top bar shared by the main pages. `room` is the page's room switcher.
 export function AppHeader({ room }: { room?: ReactNode }) {
@@ -23,10 +26,7 @@ export function AppHeader({ room }: { room?: ReactNode }) {
     <header className="flex flex-wrap items-center gap-4">
       <span className="pr-2 text-[17px] font-semibold">Stagehand</span>
       <nav className="flex flex-wrap gap-1 rounded-xl bg-surface-1 p-1">
-        <Link
-          to="/configure"
-          className="rounded-[9px] px-[18px] py-2.5 text-muted-foreground data-[status=active]:bg-primary data-[status=active]:font-semibold data-[status=active]:text-primary-foreground"
-        >
+        <Link to="/configure" className={TAB}>
           Configure
         </Link>
         {SOON.map((label) => (
@@ -39,6 +39,9 @@ export function AppHeader({ room }: { room?: ReactNode }) {
             {label}
           </span>
         ))}
+        <Link to="/perform" className={TAB}>
+          Perform
+        </Link>
       </nav>
       <div className="flex-1" />
       {room}

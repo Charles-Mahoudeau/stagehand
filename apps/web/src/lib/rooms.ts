@@ -17,7 +17,7 @@ export type FixtureInput = {
 }
 
 // Turns an error response's `{ error }` into a thrown Error.
-async function failure(res: { status: number; json(): Promise<unknown> }) {
+export async function failure(res: { status: number; json(): Promise<unknown> }) {
   const body = (await res.json().catch(() => null)) as { error?: string } | null
   return new Error(body?.error ?? `Request failed (${res.status})`)
 }

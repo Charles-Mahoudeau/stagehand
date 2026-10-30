@@ -13,6 +13,7 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedConfigureRouteImport } from './routes/_authed/configure'
+import { Route as AuthedPerformRouteImport } from './routes/_authed/perform'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
@@ -33,15 +34,22 @@ const AuthedConfigureRoute = AuthedConfigureRouteImport.update({
   path: '/configure',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedPerformRoute = AuthedPerformRouteImport.update({
+  id: '/perform',
+  path: '/perform',
+  getParentRoute: () => AuthedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
   '/login': typeof LoginRoute
   '/configure': typeof AuthedConfigureRoute
+  '/perform': typeof AuthedPerformRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/configure': typeof AuthedConfigureRoute
+  '/perform': typeof AuthedPerformRoute
   '/': typeof AuthedIndexRoute
 }
 export interface FileRoutesById {
@@ -49,14 +57,21 @@ export interface FileRoutesById {
   '/_authed': typeof AuthedRouteWithChildren
   '/login': typeof LoginRoute
   '/_authed/configure': typeof AuthedConfigureRoute
+  '/_authed/perform': typeof AuthedPerformRoute
   '/_authed/': typeof AuthedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/configure'
+  fullPaths: '/' | '/login' | '/configure' | '/perform'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/configure' | '/'
-  id: '__root__' | '/_authed' | '/login' | '/_authed/configure' | '/_authed/'
+  to: '/login' | '/configure' | '/perform' | '/'
+  id:
+    | '__root__'
+    | '/_authed'
+    | '/login'
+    | '/_authed/configure'
+    | '/_authed/perform'
+    | '/_authed/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -94,16 +109,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedConfigureRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/perform': {
+      id: '/_authed/perform'
+      path: '/perform'
+      fullPath: '/perform'
+      preLoaderRoute: typeof AuthedPerformRouteImport
+      parentRoute: typeof AuthedRoute
+    }
   }
 }
 
 interface AuthedRouteChildren {
   AuthedConfigureRoute: typeof AuthedConfigureRoute
+  AuthedPerformRoute: typeof AuthedPerformRoute
   AuthedIndexRoute: typeof AuthedIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedConfigureRoute: AuthedConfigureRoute,
+  AuthedPerformRoute: AuthedPerformRoute,
   AuthedIndexRoute: AuthedIndexRoute,
 }
 

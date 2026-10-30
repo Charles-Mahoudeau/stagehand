@@ -18,7 +18,8 @@ type Live = {
 const LiveContext = createContext<Live | null>(null)
 
 // One socket for the signed-in app: keeps the DMX output and identify state
-// current, and refetches rooms and fixtures when another client changes them.
+// current, and refetches rooms, fixtures, targets and calibration when another
+// client changes them.
 export function LiveProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
   const [dmx, setDmx] = useState<DmxState | null>(null)
@@ -31,6 +32,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         break
       case 'fixtures.changed':
         void queryClient.invalidateQueries({ queryKey: ['rooms', msg.roomId, 'fixtures'] })
+        break
+      case 'targets.changed':
+        void queryClient.invalidateQueries({ queryKey: ['rooms', msg.roomId, 'targets'] })
+        break
+      case 'calibration.changed':
+        void queryClient.invalidateQueries({ queryKey: ['rooms', msg.roomId, 'calibration'] })
         break
       case 'dmx.state': {
         const { type: _, ...state } = msg
