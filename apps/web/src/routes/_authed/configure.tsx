@@ -23,11 +23,9 @@ export const Route = createFileRoute('/_authed/configure')({
     view: z.enum(['plan', 'sheet', 'universe', 'targets']).optional(),
     room: z.number().int().optional(),
     fixture: z.number().int().optional(),
-    // Targets view: calibrating rather than placing objects, and what is picked.
-    mode: z.enum(['calibrate']).optional(),
+    // Targets view: what is picked.
     target: z.number().int().optional(),
     head: z.number().int().optional(),
-    point: z.number().int().optional(),
   }),
   component: ConfigurePage,
 })
@@ -66,7 +64,6 @@ function ConfigurePage() {
                     fixture: undefined,
                     target: undefined,
                     head: undefined,
-                    point: undefined,
                   }),
                 })
               }

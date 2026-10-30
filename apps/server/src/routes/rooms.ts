@@ -150,10 +150,6 @@ export const roomRoutes = createRouter()
     if (Object.keys(changes).length === 0) return c.json(old, 200)
     const room = db.update(rooms).set(changes).where(eq(rooms.id, roomId)).returning().get()
     broadcast({ type: 'rooms.changed' })
-    // The size is part of every head's calibration.
-    if (changes.width !== undefined || changes.depth !== undefined) {
-      broadcast({ type: 'calibration.changed', roomId })
-    }
     return c.json(room, 200)
   })
   .openapi(deleteRoom, (c) => {

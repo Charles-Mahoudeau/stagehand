@@ -8,7 +8,6 @@ import { requireAuth } from './lib/auth'
 import { createRouter } from './lib/router'
 import { webDistDir } from './paths'
 import { auth } from './routes/auth'
-import { calibrationRoutes } from './routes/calibration'
 import { dmx } from './routes/dmx'
 import { fixtureRoutes } from './routes/fixtures'
 import { health } from './routes/health'
@@ -30,7 +29,6 @@ const routes = app
   .route('/api', roomRoutes)
   .route('/api', fixtureRoutes)
   .route('/api', targetRoutes)
-  .route('/api', calibrationRoutes)
 
 app.get('/ws', wsHandler)
 

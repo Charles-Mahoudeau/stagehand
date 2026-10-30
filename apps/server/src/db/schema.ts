@@ -54,7 +54,8 @@ export const fixtures = sqliteTable(
   ],
 )
 
-// A named spot on the room plan that moving heads can be aimed at.
+// A named place moving heads can be sent to ("DJ booth"). It is shared by all
+// the room's heads; where each one points for it is in `targetPositions`.
 export const targets = sqliteTable(
   'targets',
   {
@@ -65,18 +66,14 @@ export const targets = sqliteTable(
     name: text('name').notNull(),
     // Stable identifier for scenes and the API, unique in the room.
     slug: text('slug').notNull(),
-    // Same plan coordinates as fixtures.
-    x: real('x').notNull(),
-    y: real('y').notNull(),
-    // Meters above the floor; only used once the room has a size.
-    height: real('height'),
   },
   (t) => [uniqueIndex('targets_room_slug_unique').on(t.roomId, t.slug)],
 )
 
-// A per-head correction for one target, in degrees, on top of the fitted aim.
-export const targetNudges = sqliteTable(
-  'target_nudges',
+// Where one head points for one target, as 16-bit DMX values. Heads hang
+// differently, so the same target has different pan/tilt on each.
+export const targetPositions = sqliteTable(
+  'target_positions',
   {
     targetId: integer('target_id')
       .notNull()
@@ -84,26 +81,8 @@ export const targetNudges = sqliteTable(
     fixtureId: integer('fixture_id')
       .notNull()
       .references(() => fixtures.id, { onDelete: 'cascade' }),
-    pan: real('pan').notNull().default(0),
-    tilt: real('tilt').notNull().default(0),
+    pan: integer('pan').notNull(),
+    tilt: integer('tilt').notNull(),
   },
   (t) => [primaryKey({ columns: [t.targetId, t.fixtureId] })],
-)
-
-// A spot a moving head's beam was jogged onto, for fitting its aim. Pan and
-// tilt are 16-bit DMX values; null until saved.
-export const calibrationPoints = sqliteTable(
-  'calibration_points',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    fixtureId: integer('fixture_id')
-      .notNull()
-      .references(() => fixtures.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(),
-    x: real('x').notNull(),
-    y: real('y').notNull(),
-    pan: integer('pan'),
-    tilt: integer('tilt'),
-  },
-  (t) => [index('calibration_points_fixture').on(t.fixtureId)],
 )
