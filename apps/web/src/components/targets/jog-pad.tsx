@@ -14,10 +14,17 @@ import { useLive } from '@/lib/live'
 import type { Fixture } from '@/lib/rooms'
 import { DIMMER_OFFSET, livePanTilt, panTiltValues, SPEED_OFFSET } from '@/lib/targets'
 
-// Jog steps, in 16-bit units: about 0.05° and 2° of pan.
-const FINE = 6
-const COARSE = 240
-const REPEAT_MS = 60
+// A tap nudges by about 0.05° of pan, in 16-bit units.
+const NUDGE = 6
+// Holding waits a beat, then speeds up from CREEP to TOP degrees per second,
+// so a long hold crosses the room and a short one stays precise.
+const HOLD_DELAY_S = 0.25
+const RAMP_S = 1.5
+const CREEP = 2
+const TOP = 60
+// Shift holds the speed down for the last degree of aim.
+const PRECISE = 1
+const SEND_MS = 33
 // Keep showing the jogged value until the server's broadcast catches up.
 const SETTLE_MS = 400
 
@@ -33,9 +40,12 @@ export function JogPad({ head, roomActive }: Props) {
   const { dmx, setChannels } = useLive()
   const live = livePanTilt(head, roomActive ? dmx?.channels : null)
   const [draft, setDraft] = useState<PanTilt | null>(null)
-  const [fine, setFine] = useState(true)
   const settle = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const repeat = useRef<ReturnType<typeof setInterval>>(undefined)
+  // Directions currently held, by source (a key or a button), and the motion they drive.
+  const held = useRef(new Map<string, readonly [number, number]>())
+  const frame = useRef<number>(undefined)
+  const motion = useRef({ start: 0, last: 0, sent: 0, pan: 0, tilt: 0 })
+  const shift = useRef(false)
   const shown = draft ?? live ?? { pan: 0, tilt: 0 }
   const current = useRef(shown)
   current.current = shown
@@ -52,15 +62,47 @@ export function JogPad({ head, roomActive }: Props) {
     clearTimeout(settle.current)
     settle.current = setTimeout(() => setDraft(null), SETTLE_MS)
   }
-  const jog = (pan: number, tilt: number, coarse = !fine) => {
-    const step = coarse ? COARSE : FINE
-    send({ pan: current.current.pan + pan * step, tilt: current.current.tilt + tilt * step })
+  const nudge = (pan: number, tilt: number) =>
+    send({ pan: current.current.pan + pan * NUDGE, tilt: current.current.tilt + tilt * NUDGE })
+  const tick = (now: number) => {
+    const m = motion.current
+    const dt = (now - m.last) / 1000
+    m.last = now
+    let dx = 0
+    let dy = 0
+    for (const [x, y] of held.current.values()) {
+      dx += x
+      dy += y
+    }
+    const held_s = (now - m.start) / 1000 - HOLD_DELAY_S
+    const ramp = Math.min(1, Math.max(0, held_s / RAMP_S)) ** 2
+    const speed = held_s < 0 ? 0 : shift.current ? PRECISE : CREEP + (TOP - CREEP) * ramp
+    m.pan += Math.sign(dx) * speed * dt * (MAX_16 / PAN_RANGE)
+    m.tilt += Math.sign(dy) * speed * dt * (MAX_16 / TILT_RANGE)
+    if (now - m.sent >= SEND_MS && speed > 0) {
+      m.sent = now
+      send({ pan: m.pan, tilt: m.tilt })
+    }
+    frame.current = requestAnimationFrame(tick)
   }
-  const stopRepeat = () => clearInterval(repeat.current)
-  const startRepeat = (pan: number, tilt: number) => {
-    stopRepeat()
-    jog(pan, tilt)
-    repeat.current = setInterval(() => jog(pan, tilt), REPEAT_MS)
+  const press = (id: string, pan: number, tilt: number) => {
+    held.current.set(id, [pan, tilt])
+    if (frame.current !== undefined) return
+    const now = performance.now()
+    nudge(pan, tilt)
+    motion.current = { start: now, last: now, sent: now, ...current.current }
+    frame.current = requestAnimationFrame(tick)
+  }
+  const release = (id: string) => {
+    held.current.delete(id)
+    if (held.current.size > 0 || frame.current === undefined) return
+    cancelAnimationFrame(frame.current)
+    frame.current = undefined
+    // Land exactly where the hold ended.
+    send({ pan: motion.current.pan, tilt: motion.current.tilt })
+  }
+  const releaseAll = () => {
+    for (const id of [...held.current.keys()]) release(id)
   }
   const toggleBeam = () => {
     // Fastest moves, full dimmer, shutter open; color and gobo stay as they are.
@@ -70,30 +112,52 @@ export function JogPad({ head, roomActive }: Props) {
   useEffect(
     () => () => {
       clearTimeout(settle.current)
-      clearInterval(repeat.current)
+      if (frame.current !== undefined) cancelAnimationFrame(frame.current)
     },
     [],
   )
 
-  // Arrow keys jog while the calibrate view is open, unless typing somewhere.
-  const jogRef = useRef(jog)
-  jogRef.current = jog
+  // Arrow keys move the head while the calibrate view is open, unless typing somewhere.
+  // Hold for speed, Shift for precision; two arrows together move diagonally.
+  const pressRef = useRef(press)
+  pressRef.current = press
+  const releaseRef = useRef(release)
+  releaseRef.current = release
+  const releaseAllRef = useRef(releaseAll)
+  releaseAllRef.current = releaseAll
   useEffect(() => {
     if (!roomActive) return
-    const onKey = (e: KeyboardEvent) => {
+    const dirs: Record<string, readonly [number, number]> = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      shift.current = e.shiftKey
       const el = e.target as HTMLElement
       if (el.closest('input, textarea, select, [contenteditable], [role=slider]')) return
       // Markers on the plan use the arrows to move themselves.
       if (el.closest('[data-plan-marker]')) return
-      const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[
-        e.key
-      ]
+      const d = dirs[e.key]
       if (!d) return
       e.preventDefault()
-      jogRef.current(d[0] ?? 0, d[1] ?? 0, e.shiftKey)
+      if (!e.repeat) pressRef.current(e.key, d[0], d[1])
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    const onKeyUp = (e: KeyboardEvent) => {
+      shift.current = e.shiftKey
+      if (dirs[e.key]) releaseRef.current(e.key)
+    }
+    const onBlur = () => releaseAllRef.current()
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+      releaseAllRef.current()
+    }
   }, [roomActive])
 
   const arrow = (label: string, pan: number, tilt: number, Icon: typeof ChevronUp) => (
@@ -103,14 +167,17 @@ export function JogPad({ head, roomActive }: Props) {
       variant="quiet"
       className="bg-surface-2 hover:bg-surface-3"
       disabled={!roomActive}
-      onPointerDown={() => startRepeat(pan, tilt)}
-      onPointerUp={stopRepeat}
-      onPointerLeave={stopRepeat}
-      onPointerCancel={stopRepeat}
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId)
+        shift.current = e.shiftKey
+        press(label, pan, tilt)
+      }}
+      onPointerUp={() => release(label)}
+      onPointerCancel={() => release(label)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
-          jog(pan, tilt)
+          nudge(pan, tilt)
         }
       }}
     >
@@ -122,22 +189,6 @@ export function JogPad({ head, roomActive }: Props) {
     <div className="flex flex-col gap-3.5">
       <div className="flex items-center justify-between">
         <span className="text-[13px] font-semibold">Jog {head.name}</span>
-        <div className="flex gap-[3px] rounded-[10px] bg-surface-2 p-[3px] text-xs">
-          {[false, true].map((f) => (
-            <button
-              key={String(f)}
-              type="button"
-              aria-pressed={fine === f}
-              onClick={() => setFine(f)}
-              className={cn(
-                'rounded-[7px] px-2.5 py-1.5',
-                fine === f ? 'bg-surface-3 text-foreground' : 'text-muted-foreground',
-              )}
-            >
-              {f ? 'Fine' : 'Coarse'}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="flex items-center gap-4">
@@ -188,7 +239,7 @@ export function JogPad({ head, roomActive }: Props) {
       </div>
       <span className="text-xs text-muted-foreground">
         {roomActive
-          ? `Arrow keys jog · Shift for coarse · step ${fine ? '0.05°' : '2°'}`
+          ? 'Hold an arrow key to speed up · Shift to go slow · tap to nudge'
           : 'Make this room active to move the head'}
       </span>
     </div>
