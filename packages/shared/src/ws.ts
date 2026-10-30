@@ -8,6 +8,8 @@ export const ServerMessage = z.discriminatedUnion('type', [
   // Something was created, renamed, deleted or activated; clients refetch.
   z.object({ type: z.literal('rooms.changed') }),
   z.object({ type: z.literal('fixtures.changed'), roomId: z.number() }),
+  z.object({ type: z.literal('targets.changed'), roomId: z.number() }),
+  z.object({ type: z.literal('calibration.changed'), roomId: z.number() }),
   // Output status and channels 1–512 (index 0 is channel 1). Sent on connect,
   // whenever channels change (at most 10 times a second) and once a second.
   z.object({

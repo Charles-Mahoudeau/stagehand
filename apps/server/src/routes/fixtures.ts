@@ -10,7 +10,7 @@ import { errorResponse, jsonResponse as json } from '../lib/schemas'
 import { broadcast } from '../ws'
 import { findRoom, RoomParams } from './rooms'
 
-const PositionSchema = z
+export const PositionSchema = z
   .object({
     x: z.number().min(0).max(1).openapi({ description: '0 = left wall, 1 = right wall' }),
     y: z.number().min(0).max(1).openapi({ description: '0 = stage side, 1 = back of room' }),
@@ -63,7 +63,7 @@ const FixtureUpdateSchema = z
   .partial()
   .openapi('FixtureUpdate')
 
-const FixtureParams = RoomParams.extend({
+export const FixtureParams = RoomParams.extend({
   fixtureId: z.coerce
     .number()
     .int()
@@ -192,7 +192,7 @@ function toFixture({ x, y, ...row }: FixtureRow) {
   }
 }
 
-function findFixture(roomId: number, id: number) {
+export function findFixture(roomId: number, id: number) {
   return db
     .select()
     .from(fixtures)
