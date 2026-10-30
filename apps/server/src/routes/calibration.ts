@@ -75,7 +75,7 @@ const addPoint = createRoute({
   summary: 'Add a calibration point to a moving head',
   description:
     'A spot on the plan to jog the beam onto. Save the pan/tilt that hits it; ' +
-    'four saved points are enough to aim the head anywhere.',
+    'five saved points are enough to aim the head anywhere.',
   request: {
     params: FixtureParams,
     body: { required: true, content: { 'application/json': { schema: PointCreateSchema } } },

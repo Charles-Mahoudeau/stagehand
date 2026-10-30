@@ -8,12 +8,14 @@
 // model is a 3D one: the head sits at (hx, hy) at some height above the floor,
 // and the room has a depth/width ratio.
 //
-// With the room's size and the head's hanging height known (`Geometry`), those
-// two are fixed, the head's plan position is only nudged from where it was
-// patched, and what is left (pan/tilt offsets, which way they turn, a little
-// lean) is well over-determined by four points. Object heights count too.
-// Without them the fit has to find height and ratio as well, which takes more
-// points and is much less reliable.
+// This is a ray-plane solve. Each saved point is a ray out of the head (from
+// its pan/tilt) that has to land on a known spot of the floor plane, so the fit
+// looks for the head's 3D pose (where it hangs, how it is turned and leaning,
+// where its tilt zero is) that makes all the rays meet their spots. It needs
+// five points. With the room's size and the head's hanging height known
+// (`Geometry`) those are fixed and the fit is well over-determined; without
+// them it has to find height and ratio as well, which is less reliable.
+// Object heights count too.
 
 // Travel of the Wakanda moving heads (docs/rooms/wakanda/README.md), in degrees.
 export const PAN_RANGE = 540
@@ -45,14 +47,21 @@ export function spotAt(room: RoomSize, p: PlanPoint, height: number | null): Spo
   return positive(room.width) && positive(height) ? { ...p, z: height / room.width } : p
 }
 
-// Fewer points than this leaves the model underdetermined, or so loose that
-// jogging error moves the aim by many degrees. Two equations a point, against
-// 6 unknowns with a known geometry or 8 without; simulated, 4 points with a
-// geometry aim about as well as 6 without.
-export const minCalibrationPoints = (geometry?: Geometry | null) => (geometry ? 4 : 6)
+// The 5-point solve needs this many saved points, with or without a known
+// geometry. Each is a ray out of the head (from its pan/tilt) that must land on
+// a known spot of the floor plane: two equations a point, against the head's
+// pose (position and 3D rotation) plus its tilt zero, 6 unknowns, or 8 when
+// height and room ratio aren't known either. Five points over-determine even
+// that, so a badly jogged one shows up as error instead of bending the fit.
+export const MIN_CALIBRATION_POINTS = 5
+
 // Pan and tilt as 16-bit DMX values (coarse·256 + fine).
 export type PanTilt = { pan: number; tilt: number }
 export type CalibrationSample = PlanPoint & PanTilt
+
+type Vec3 = [number, number, number]
+// Row-major 3×3.
+type Mat3 = [number, number, number, number, number, number, number, number, number]
 
 export type HeadModel = {
   // Where the head hangs on the plan.
@@ -62,16 +71,15 @@ export type HeadModel = {
   height: number
   // Room depth / width.
   aspect: number
-  // Pan and tilt (degrees) when the beam points along +x / straight down.
-  panOffset: number
+  // Tilt (degrees) when the beam points straight down the head's own axis.
   tiltOffset: number
-  // Which way pan and tilt turn.
+  // Which way pan turns, seen from the room's +z. (Tilt's direction and pan's
+  // zero are a turn of the head about its axis, which `rotation` has.)
   panSign: 1 | -1
-  tiltSign: 1 | -1
-  // How far the head's base leans off level (degrees, about the plan's x and
-  // y axes): a clamp on a truss is rarely square.
-  leanX: number
-  leanY: number
+  // The head's orientation in the room as a rotation vector (axis × angle, in
+  // radians): its pan zero, and how far its base leans off level, as a clamp on
+  // a truss is rarely square.
+  rotation: Vec3
 }
 
 export type HeadFit = {
@@ -93,52 +101,81 @@ const clamp16 = (v: number) => Math.min(MAX_16, Math.max(0, v))
 // A 16-bit value as its [coarse, fine] DMX channel pair.
 export const coarseFine = (v: number) => [v >> 8, v & 255] as const
 
-// Wraps an angle to (-180, 180].
-const wrap = (deg: number) => deg - 360 * Math.ceil((deg - 180) / 360)
-
-// Direction from the head to a floor spot, in the head's own frame: azimuth
-// round its axis, and angle away from that axis, both in degrees.
-function direction(m: HeadModel, p: Spot) {
-  const dx = p.x - m.hx
-  const dy = (p.y - m.hy) * m.aspect
-  const dz = (p.z ?? 0) - m.height
-  // Undo the base's lean: about x, then about y.
-  const ax = m.leanX / DEG
-  const ay = m.leanY / DEG
-  const y1 = dy * Math.cos(ax) + dz * Math.sin(ax)
-  const z1 = -dy * Math.sin(ax) + dz * Math.cos(ax)
-  const x2 = dx * Math.cos(ay) - z1 * Math.sin(ay)
-  const z2 = dx * Math.sin(ay) + z1 * Math.cos(ay)
-  return {
-    azimuth: Math.atan2(y1, x2) * DEG,
-    offVertical: Math.atan2(Math.hypot(x2, y1), -z2) * DEG,
-  }
+function rotationMatrix([x, y, z]: Vec3): Mat3 {
+  const angle = Math.hypot(x, y, z)
+  if (angle < 1e-12) return [1, 0, 0, 0, 1, 0, 0, 0, 1]
+  const [kx, ky, kz] = [x / angle, y / angle, z / angle]
+  const c = Math.cos(angle)
+  const s = Math.sin(angle)
+  const t = 1 - c
+  return [
+    t * kx * kx + c,
+    t * kx * ky - s * kz,
+    t * kx * kz + s * ky,
+    t * kx * ky + s * kz,
+    t * ky * ky + c,
+    t * ky * kz - s * kx,
+    t * kx * kz - s * ky,
+    t * ky * kz + s * kx,
+    t * kz * kz + c,
+  ]
 }
+
+const rotate = (m: Mat3, [x, y, z]: Vec3): Vec3 => [
+  m[0] * x + m[1] * y + m[2] * z,
+  m[3] * x + m[4] * y + m[5] * z,
+  m[6] * x + m[7] * y + m[8] * z,
+]
+
+// The inverse rotation: the transpose.
+const rotateBack = (m: Mat3, [x, y, z]: Vec3): Vec3 => [
+  m[0] * x + m[3] * y + m[6] * z,
+  m[1] * x + m[4] * y + m[7] * z,
+  m[2] * x + m[5] * y + m[8] * z,
+]
+
+// Unit vector for the beam at `pan` and `tilt` (degrees), in the head's own
+// frame: z down its axis at tilt zero, tilting away from it towards the pan.
+function beam(m: Pick<HeadModel, 'panSign' | 'tiltOffset'>, pan: number, tilt: number): Vec3 {
+  const a = (m.panSign * pan) / DEG
+  const b = (tilt - m.tiltOffset) / DEG
+  return [Math.sin(b) * Math.cos(a), Math.sin(b) * Math.sin(a), -Math.cos(b)]
+}
+
+// Unit vector from the head to a spot, in the room's frame (x, y scaled to
+// room widths, z up).
+function towards(m: HeadModel, p: Spot): Vec3 {
+  const v: Vec3 = [p.x - m.hx, (p.y - m.hy) * m.aspect, (p.z ?? 0) - m.height]
+  const n = Math.max(Math.hypot(...v), 1e-9)
+  return [v[0] / n, v[1] / n, v[2] / n]
+}
+
+// The angle (degrees) between where the model aims a sample's pan/tilt and where
+// the spot it was saved at lies.
+function sampleError(m: HeadModel, s: CalibrationSample) {
+  const a = rotate(rotationMatrix(m.rotation), beam(m, panDegrees(s.pan), tiltDegrees(s.tilt)))
+  const b = towards(m, s)
+  const cross = Math.hypot(
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  )
+  return Math.atan2(cross, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) * DEG
+}
+
+// How far the head's axis leans off straight up, in degrees.
+const lean = (m: HeadModel) => Math.acos(Math.min(1, rotationMatrix(m.rotation)[8])) * DEG
 
 // The two pan/tilt pairs (degrees, before wrapping pan) that point at `p`: a
 // head reaches every direction twice, once flipped over by 180° of pan.
 function solutions(m: HeadModel, p: Spot) {
-  const { azimuth, offVertical } = direction(m, p)
-  const pan = m.panOffset + m.panSign * azimuth
-  const tilt = m.tiltSign * offVertical
+  const [x, y, z] = rotateBack(rotationMatrix(m.rotation), towards(m, p))
+  const a = Math.atan2(y, x) * DEG
+  const b = Math.atan2(Math.hypot(x, y), -z) * DEG
   return [
-    { pan, tilt: m.tiltOffset + tilt, offVertical },
-    { pan: pan + 180, tilt: m.tiltOffset - tilt, offVertical },
+    { pan: m.panSign * a, tilt: m.tiltOffset + b },
+    { pan: m.panSign * (a + 180), tilt: m.tiltOffset - b },
   ]
-}
-
-// Angular distance between where the model points and a saved sample. Pan
-// error counts for less near straight down, where pan barely moves the spot.
-function sampleError(m: HeadModel, s: CalibrationSample) {
-  const pan = panDegrees(s.pan)
-  const tilt = tiltDegrees(s.tilt)
-  let best = Number.POSITIVE_INFINITY
-  for (const sol of solutions(m, s)) {
-    const dPan = wrap(pan - sol.pan) * Math.sin(sol.offVertical / DEG)
-    const dTilt = tilt - sol.tilt
-    best = Math.min(best, Math.hypot(dPan, dTilt))
-  }
-  return best
 }
 
 // Degrees of sample error one degree of lean is worth: enough that a level
@@ -150,49 +187,35 @@ const LEAN_COST = 0.2
 // absorb a badly jogged point by moving the head across the room.
 const POSITION_COST = 15
 
-// The residual vector the solver minimises: pan and tilt error per sample,
-// each on the branch that fits it best, then the lean and the head's distance
-// from where it was patched (`near`).
+// The residual vector the solver minimizes: per sample, the gap between the
+// beam and the ray to its spot (unit vectors, scaled so it reads in degrees),
+// then the lean and the head's distance from where it was patched (`near`).
 function residuals(m: HeadModel, samples: CalibrationSample[], near: PlanPoint | null) {
+  const R = rotationMatrix(m.rotation)
   const out: number[] = []
   for (const s of samples) {
-    const pan = panDegrees(s.pan)
-    const tilt = tiltDegrees(s.tilt)
-    let best: [number, number] = [0, 0]
-    let bestNorm = Number.POSITIVE_INFINITY
-    for (const sol of solutions(m, s)) {
-      const r: [number, number] = [
-        wrap(pan - sol.pan) * Math.sin(sol.offVertical / DEG),
-        tilt - sol.tilt,
-      ]
-      const norm = Math.hypot(...r)
-      if (norm < bestNorm) {
-        bestNorm = norm
-        best = r
-      }
-    }
-    out.push(...best)
+    const a = rotate(R, beam(m, panDegrees(s.pan), tiltDegrees(s.tilt)))
+    const b = towards(m, s)
+    out.push((a[0] - b[0]) * DEG, (a[1] - b[1]) * DEG, (a[2] - b[2]) * DEG)
   }
-  out.push(m.leanX * LEAN_COST, m.leanY * LEAN_COST)
+  // The axis' x and y are the lean about y and x, near enough.
+  out.push(R[2] * DEG * LEAN_COST, R[5] * DEG * LEAN_COST)
   if (near) out.push((m.hx - near.x) * POSITION_COST, (m.hy - near.y) * POSITION_COST)
   return out
 }
 
 // Continuous parameters the solver moves; height and aspect go in as logs so
-// they stay positive.
+// they stay positive. The last three are the rotation vector.
 type Params = [number, number, number, number, number, number, number, number]
 
-const toModel = (p: Params, panSign: 1 | -1, tiltSign: 1 | -1): HeadModel => ({
+const toModel = (p: Params, panSign: 1 | -1): HeadModel => ({
   hx: p[0],
   hy: p[1],
   height: Math.exp(p[2]),
   aspect: Math.exp(p[3]),
-  panOffset: p[4],
-  tiltOffset: p[5],
+  tiltOffset: p[4],
   panSign,
-  tiltSign,
-  leanX: p[6],
-  leanY: p[7],
+  rotation: [p[5], p[6], p[7]],
 })
 
 const sumSquares = (r: number[]) => r.reduce((a, v) => a + v * v, 0)
@@ -203,12 +226,11 @@ const sumSquares = (r: number[]) => r.reduce((a, v) => a + v * v, 0)
 function solve(
   start: Params,
   panSign: 1 | -1,
-  tiltSign: 1 | -1,
   samples: CalibrationSample[],
   near: PlanPoint | null,
   free: number[],
 ) {
-  const evaluate = (q: Params) => residuals(toModel(q, panSign, tiltSign), samples, near)
+  const evaluate = (q: Params) => residuals(toModel(q, panSign), samples, near)
   let p = [...start] as Params
   let r = evaluate(p)
   let cost = sumSquares(r)
@@ -286,6 +308,79 @@ function solveLinear(M: number[][], b: number[]): number[] | null {
   return x
 }
 
+// The rotation (as a rotation vector) that best turns each unit vector of
+// `from` onto its partner in `to`: Horn's closed-form solution, the top
+// eigenvector of a 4×4 matrix built from the pairs, as a quaternion.
+function alignRays(from: Vec3[], to: Vec3[]): Vec3 {
+  const S = [0, 0, 0].map(() => [0, 0, 0])
+  from.forEach((f, i) => {
+    const t = to[i] as Vec3
+    for (let a = 0; a < 3; a++) {
+      const row = S[a] as number[]
+      for (let b = 0; b < 3; b++) row[b] = (row[b] as number) + (f[a] as number) * (t[b] as number)
+    }
+  })
+  const [[xx, xy, xz], [yx, yy, yz], [zx, zy, zz]] = S as [Vec3, Vec3, Vec3]
+  const q = topEigenvector([
+    [xx + yy + zz, yz - zy, zx - xz, xy - yx],
+    [yz - zy, xx - yy - zz, xy + yx, zx + xz],
+    [zx - xz, xy + yx, -xx + yy - zz, yz + zy],
+    [xy - yx, zx + xz, yz + zy, -xx - yy + zz],
+  ])
+  const sign = (q[0] as number) < 0 ? -1 : 1
+  const w = sign * (q[0] as number)
+  const v: Vec3 = [sign * (q[1] as number), sign * (q[2] as number), sign * (q[3] as number)]
+  const sin = Math.hypot(...v)
+  if (sin < 1e-12) return [0, 0, 0]
+  const angle = 2 * Math.atan2(sin, w)
+  return [(v[0] * angle) / sin, (v[1] * angle) / sin, (v[2] * angle) / sin]
+}
+
+// Eigenvector of the largest eigenvalue of a symmetric matrix, by Jacobi
+// rotations.
+function topEigenvector(M: number[][]): number[] {
+  const n = M.length
+  const a = M.map((row) => [...row])
+  const v = a.map((_, i) => a.map((_, j) => (i === j ? 1 : 0)))
+  for (let sweep = 0; sweep < 50; sweep++) {
+    let off = 0
+    for (let p = 0; p < n; p++) {
+      for (let q = p + 1; q < n; q++) off += ((a[p] as number[])[q] as number) ** 2
+    }
+    if (off < 1e-24) break
+    for (let p = 0; p < n - 1; p++) {
+      for (let q = p + 1; q < n; q++) {
+        const apq = (a[p] as number[])[q] as number
+        if (Math.abs(apq) < 1e-300) continue
+        const theta =
+          (((a[q] as number[])[q] as number) - ((a[p] as number[])[p] as number)) / (2 * apq)
+        const t = (theta < 0 ? -1 : 1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1))
+        const c = 1 / Math.sqrt(t * t + 1)
+        const s = t * c
+        for (const m of [a, v]) {
+          for (const row of m) {
+            const rp = row[p] as number
+            const rq = row[q] as number
+            row[p] = c * rp - s * rq
+            row[q] = s * rp + c * rq
+          }
+        }
+        for (let k = 0; k < n; k++) {
+          const rp = (a[p] as number[])[k] as number
+          const rq = (a[q] as number[])[k] as number
+          ;(a[p] as number[])[k] = c * rp - s * rq
+          ;(a[q] as number[])[k] = s * rp + c * rq
+        }
+      }
+    }
+  }
+  let top = 0
+  for (let i = 1; i < n; i++) {
+    if (((a[i] as number[])[i] as number) > ((a[top] as number[])[top] as number)) top = i
+  }
+  return v.map((row) => row[top] as number)
+}
+
 // Two saved points closer than this in both pan and tilt (degrees), but
 // apart on the plan, mean the head wasn't jogged between them.
 const SAME_AIM_DEGREES = 0.5
@@ -315,58 +410,58 @@ const plausible = (m: HeadModel, known: boolean) =>
   m.hy > -1 &&
   m.hy < 2 &&
   (known || (m.height < 5 && m.aspect > 0.05 && m.aspect < 20)) &&
-  Math.abs(m.leanX) < 30 &&
-  Math.abs(m.leanY) < 30
+  lean(m) < 30
 
 const FREE_UNKNOWN_GEOMETRY = [0, 1, 2, 3, 4, 5, 6, 7]
 const FREE_KNOWN_GEOMETRY = [0, 1, 4, 5, 6, 7]
 
-// Fits a head model to its calibration samples. `near` is where the head is
-// patched on the plan: the fit starts there and is kept close to it.
-// `geometry` fixes the head's height and the room's proportions when known.
-// Null with fewer than minCalibrationPoints samples, when some repeat an aim
+// Where a head's tilt zero might be to start from: straight down at mid
+// travel, or a quarter either side.
+const TILT_STARTS = [TILT_RANGE / 2, TILT_RANGE / 3, (TILT_RANGE * 2) / 3]
+
+// Fits a head model to its calibration samples: the pose that puts every saved
+// beam on its spot of the floor. `near` is where the head is patched on the
+// plan: the fit starts there and is kept close to it. `geometry` fixes the
+// head's height and the room's proportions when known.
+// For each way pan can turn and a few guesses at the tilt zero, the beams are
+// turned onto the rays to the spots in closed form (see alignRays) as a first
+// pose, which the solver then refines; the best of those wins.
+// Null with fewer than MIN_CALIBRATION_POINTS samples, when some repeat an aim
 // (see repeatedAims), or when they don't agree on any head position.
 export function fitHead(
   samples: CalibrationSample[],
   near?: PlanPoint | null,
   geometry?: Geometry | null,
 ): HeadFit | null {
-  if (samples.length < minCalibrationPoints(geometry)) return null
+  if (samples.length < MIN_CALIBRATION_POINTS) return null
   if (repeatedAims(samples).some((j) => j !== null)) return null
   const cx = near?.x ?? samples.reduce((a, s) => a + s.x, 0) / samples.length
   const cy = near?.y ?? samples.reduce((a, s) => a + s.y, 0) / samples.length
-  const first = samples[0] as CalibrationSample
   const heights = geometry ? [geometry.height] : [0.2, 0.5, 1]
   const logAspect = Math.log(geometry?.aspect ?? 1)
   const free = geometry ? FREE_KNOWN_GEOMETRY : FREE_UNKNOWN_GEOMETRY
 
   let best: { model: HeadModel; cost: number } | null = null
   for (const panSign of [1, -1] as const) {
-    for (const tiltSign of [1, -1] as const) {
-      for (const height of heights) {
-        for (const flip of [0, 180]) {
-          // Start with the first sample exactly on target.
-          const guess = toModel(
-            [cx, cy, Math.log(height), logAspect, 0, 0, 0, 0],
-            panSign,
-            tiltSign,
-          )
-          const { azimuth, offVertical } = direction(guess, first)
-          const panOffset = panDegrees(first.pan) - panSign * azimuth - flip
-          const tiltOffset = tiltDegrees(first.tilt) - (flip ? -1 : 1) * tiltSign * offVertical
-          const start: Params = [cx, cy, Math.log(height), logAspect, panOffset, tiltOffset, 0, 0]
-          const { params, cost } = solve(start, panSign, tiltSign, samples, near ?? null, free)
-          const model = toModel(params, panSign, tiltSign)
-          // A head far off, or miles up, can match samples by pointing nearly
-          // the same way at all of them; it aims nowhere useful.
-          if (plausible(model, !!geometry) && (!best || cost < best.cost)) best = { model, cost }
-        }
+    for (const height of heights) {
+      for (const tiltStart of TILT_STARTS) {
+        const guess = toModel([cx, cy, Math.log(height), logAspect, tiltStart, 0, 0, 0], panSign)
+        const rays = samples.map((s) => beam(guess, panDegrees(s.pan), tiltDegrees(s.tilt)))
+        const [rx, ry, rz] = alignRays(
+          rays,
+          samples.map((s) => towards(guess, s)),
+        )
+        const start: Params = [cx, cy, Math.log(height), logAspect, tiltStart, rx, ry, rz]
+        const { params, cost } = solve(start, panSign, samples, near ?? null, free)
+        const model = toModel(params, panSign)
+        // A head far off, or miles up, can match samples by pointing nearly
+        // the same way at all of them; it aims nowhere useful.
+        if (plausible(model, !!geometry) && (!best || cost < best.cost)) best = { model, cost }
       }
     }
   }
   if (!best) return null
   const model = best.model
-  model.panOffset = wrap(model.panOffset)
   const errors = samples.map((s) => sampleError(model, s))
   const rms = Math.sqrt(errors.reduce((a, e) => a + e * e, 0) / errors.length)
   return { model, rms, errors }

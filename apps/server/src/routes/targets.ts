@@ -4,7 +4,7 @@ import {
   coarseFine,
   fitHead,
   headGeometry,
-  minCalibrationPoints,
+  MIN_CALIBRATION_POINTS,
   type PlanPoint,
   type RoomSize,
   type Spot,
@@ -291,7 +291,7 @@ function aimHeads(
     const fit = fitHead(samples, near, geometry)
     if (!fit) {
       const reason =
-        samples.length < minCalibrationPoints(geometry)
+        samples.length < MIN_CALIBRATION_POINTS
           ? 'Not calibrated'
           : 'Calibration doesn’t fit: check its points'
       skipped.push({ fixtureId: id, reason })
