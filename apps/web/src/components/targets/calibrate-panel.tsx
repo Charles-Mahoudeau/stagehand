@@ -16,12 +16,15 @@ import {
   type HeadCalibration,
   headCalibration,
   livePanTilt,
+  PRECISION_GRID,
+  PRECISION_WORST,
   panTiltValues,
+  precisionGrid,
   useCalibrationMutations,
 } from '@/lib/targets'
 import { JogPad } from './jog-pad'
 import { NumberField } from './number-field'
-import { BeamLine, CoverageOutline, PlanMarker, PlanSvg } from './plan-overlay'
+import { BeamLine, CoverageOutline, PlanMarker, PlanSvg, PrecisionMap } from './plan-overlay'
 
 type Props = {
   room: Room
@@ -49,6 +52,9 @@ export function CalibratePanel(props: Props) {
   })
   const calibration = head && headCalibration(head, points, room)
   const channels = room.active ? dmx?.channels : null
+  const [showPrecision, setShowPrecision] = useState(true)
+  const fit = calibration?.fit
+  const precision = calibration && showPrecision ? precisionGrid(calibration) : null
 
   const addPoint = () => {
     if (!head || !calibration) return
@@ -156,6 +162,9 @@ export function CalibratePanel(props: Props) {
             calibration && (
               <>
                 <PlanSvg>
+                  {precision && (
+                    <PrecisionMap cells={precision} size={PRECISION_GRID} worst={PRECISION_WORST} />
+                  )}
                   <CoverageOutline hull={calibration.hull} />
                   {point && head.position && (
                     <BeamLine from={head.position} to={point.position} color={beamColor} />
@@ -182,7 +191,25 @@ export function CalibratePanel(props: Props) {
         />
         <div className="absolute top-3 right-3 z-10">{modeSwitch}</div>
         <div className="flex flex-wrap justify-between gap-2 px-1 text-xs text-muted-foreground">
-          <span>Dashed outline: the floor the saved points cover</span>
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <button
+              type="button"
+              aria-pressed={showPrecision}
+              disabled={!fit}
+              onClick={() => setShowPrecision((v) => !v)}
+              className={cn(
+                'rounded-[7px] bg-surface-2 px-2.5 py-1.5',
+                showPrecision && fit ? 'text-foreground' : 'text-muted-foreground',
+              )}
+            >
+              Precision
+            </button>
+            {precision ? (
+              <PrecisionLegend room={room} />
+            ) : (
+              <span>Dashed outline: the floor the saved points cover</span>
+            )}
+          </span>
           <span>
             {!head
               ? ''
@@ -396,6 +423,25 @@ function PointInspector({
 
       <GeometryCard room={room} head={head} geometry={calibration.geometry} />
     </aside>
+  )
+}
+
+// The scale of the precision map, in the room's units: metres once it has a
+// width, else a share of it.
+function PrecisionLegend({ room }: { room: Room }) {
+  const worst = room.width
+    ? `${Math.round(PRECISION_WORST * room.width * 100)} cm`
+    : `${Math.round(PRECISION_WORST * 100)}% of the width`
+  return (
+    <span className="flex items-center gap-2">
+      <span>Expected miss</span>
+      <span
+        className="h-1.5 w-20 rounded-full"
+        style={{ background: 'linear-gradient(to right, var(--surface-3), var(--warning))' }}
+      />
+      <span className="font-mono">≥ {worst}</span>
+      <span>· dark: out of reach · dashed: calibrated floor</span>
+    </span>
   )
 }
 

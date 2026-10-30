@@ -428,3 +428,35 @@ export function insideCoverage(hull: PlanPoint[], p: PlanPoint) {
   }
   return true
 }
+
+// How far a beam lands from a floor spot when the head's pan and tilt are each
+// off by `sigma` degrees, in room widths: sideways from the pan error, along
+// the floor from the tilt error. Grows with distance from the head, and
+// sharply for a shallow beam. Ignores the base's lean (a few degrees).
+export function aimMiss(model: HeadModel, p: PlanPoint, sigma: number) {
+  const r = Math.hypot(p.x - model.hx, (p.y - model.hy) * model.aspect)
+  const theta = Math.atan2(r, model.height)
+  const rad = sigma / DEG
+  const sideways = r * rad
+  const along = (model.height / Math.max(Math.cos(theta) ** 2, 0.01)) * rad
+  return Math.hypot(sideways, along)
+}
+
+// Distance (room widths) from a spot to the calibrated area; 0 inside it.
+export function distanceOutsideCoverage(hull: PlanPoint[], p: PlanPoint, aspect = 1) {
+  if (hull.length === 0) return Number.POSITIVE_INFINITY
+  if (insideCoverage(hull, p)) return 0
+  let best = Number.POSITIVE_INFINITY
+  for (let i = 0; i < hull.length; i++) {
+    const a = hull[i] as PlanPoint
+    const b = hull[(i + 1) % hull.length] as PlanPoint
+    const abx = b.x - a.x
+    const aby = (b.y - a.y) * aspect
+    const apx = p.x - a.x
+    const apy = (p.y - a.y) * aspect
+    const len2 = abx * abx + aby * aby
+    const t = len2 === 0 ? 0 : Math.min(1, Math.max(0, (apx * abx + apy * aby) / len2))
+    best = Math.min(best, Math.hypot(apx - t * abx, apy - t * aby))
+  }
+  return best
+}

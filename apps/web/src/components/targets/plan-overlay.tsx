@@ -180,6 +180,40 @@ export function CoverageOutline({ hull }: { hull: PlanPoint[] }) {
   )
 }
 
+// Expected aiming miss over the floor, cell by cell: clear where tight, amber
+// as it loosens up to `worst`, dark where the head can't reach.
+export function PrecisionMap({
+  cells,
+  size,
+  worst,
+}: {
+  cells: (number | null)[]
+  size: number
+  worst: number
+}) {
+  const w = 100 / size
+  return (
+    <g shapeRendering="crispEdges">
+      {cells.map((miss, i) => {
+        const opacity = miss === null ? 0.5 : Math.min(1, miss / worst) * 0.6
+        if (opacity < 0.01) return null
+        return (
+          <rect
+            // biome-ignore lint/suspicious/noArrayIndexKey: a fixed grid of cells
+            key={i}
+            x={(i % size) * w}
+            y={Math.floor(i / size) * w}
+            width={w + 0.05}
+            height={w + 0.05}
+            style={{ fill: miss === null ? 'var(--surface-0)' : 'var(--warning)' }}
+            fillOpacity={opacity}
+          />
+        )
+      })}
+    </g>
+  )
+}
+
 export function BeamLine({ from, to, color }: { from: PlanPoint; to: PlanPoint; color: string }) {
   return (
     <line

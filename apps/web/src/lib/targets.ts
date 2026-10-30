@@ -1,7 +1,10 @@
 import {
+  aimAt,
+  aimMiss,
   type CalibrationSample,
   coarseFine,
   coverage,
+  distanceOutsideCoverage,
   fitHead,
   type Geometry,
   type HeadFit,
@@ -262,6 +265,41 @@ function cachedFit(
     fits.set(key, fitHead(samples, near, geometry))
   }
   return fits.get(key) ?? null
+}
+
+// Finest the beam can be jogged onto a spot by eye, in degrees: the fit's
+// error can't be taken as better than this.
+const JOG_DEGREES = 0.25
+// Beyond the calibrated area the estimate grows by its distance from it over
+// this (room widths): twice as loose that far out, three times at double.
+const EXTRAPOLATION = 0.15
+export const PRECISION_GRID = 24
+// Misses at or above this (room widths) are drawn as the worst.
+export const PRECISION_WORST = 0.06
+
+// Expected miss, in room widths, of aiming a head at each cell of the floor
+// (row by row), or null where it can't reach. An estimate from the fit's
+// error, how steeply the beam lands, and how far the spot is from the points
+// it was calibrated on, not a measurement. Kept per fit, which is replaced
+// whenever the points it came from change.
+const grids = new WeakMap<HeadFit, (number | null)[]>()
+export function precisionGrid(c: HeadCalibration): (number | null)[] | null {
+  if (!c.fit) return null
+  const cached = grids.get(c.fit)
+  if (cached) return cached
+  const { model, rms } = c.fit
+  const sigma = Math.max(rms, JOG_DEGREES)
+  const grid = Array.from({ length: PRECISION_GRID ** 2 }, (_, i) => {
+    const p = {
+      x: ((i % PRECISION_GRID) + 0.5) / PRECISION_GRID,
+      y: (Math.floor(i / PRECISION_GRID) + 0.5) / PRECISION_GRID,
+    }
+    if (!aimAt(model, p)) return null
+    const outside = distanceOutsideCoverage(c.hull, p, model.aspect)
+    return aimMiss(model, p, sigma) * (1 + outside / EXTRAPOLATION)
+  })
+  grids.set(c.fit, grid)
+  return grid
 }
 
 // Why a head can't aim yet, in a sentence, or null once it has a fit.
