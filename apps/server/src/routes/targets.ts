@@ -3,8 +3,12 @@ import {
   aimAt,
   coarseFine,
   fitHead,
-  MIN_CALIBRATION_POINTS,
+  headGeometry,
+  minCalibrationPoints,
   type PlanPoint,
+  type RoomSize,
+  type Spot,
+  spotAt,
 } from '@stagehand/shared'
 import { and, eq, inArray, ne, sql } from 'drizzle-orm'
 import { db } from '../db'
@@ -250,7 +254,13 @@ function slugFor(roomId: number, name: string) {
 const slugConflict = (slug: string) => ({ error: `A target with ID "${slug}" exists in this room` })
 
 // Pan/tilt for each head, from its calibration; written straight to the output.
-function aimHeads(roomId: number, fixtureIds: number[], spot: PlanPoint, targetId?: number) {
+function aimHeads(
+  room: RoomSize & { id: number },
+  fixtureIds: number[],
+  spot: Spot,
+  targetId?: number,
+) {
+  const roomId = room.id
   const heads = db
     .select()
     .from(fixtures)
@@ -277,10 +287,11 @@ function aimHeads(roomId: number, fixtureIds: number[], spot: PlanPoint, targetI
         : [],
     )
     const near = head.x === null || head.y === null ? null : { x: head.x, y: head.y }
-    const fit = fitHead(samples, near)
+    const geometry = headGeometry(room, head.height)
+    const fit = fitHead(samples, near, geometry)
     if (!fit) {
       const reason =
-        samples.length < MIN_CALIBRATION_POINTS
+        samples.length < minCalibrationPoints(geometry)
           ? 'Not calibrated'
           : 'Calibration doesn’t fit: check its points'
       skipped.push({ fixtureId: id, reason })
@@ -385,6 +396,9 @@ export const targetRoutes = createRouter()
     if (!room.active) return c.json({ error: 'Activate the room to aim its heads' }, 409)
     const target = targetId === undefined ? undefined : findTarget(roomId, targetId)
     if (targetId !== undefined && !target) return c.json({ error: 'Target not found' }, 404)
-    const spot = target ?? (position as PlanPoint)
-    return c.json(aimHeads(roomId, fixtureIds, spot, target?.id), 200)
+    // A target's height only counts once the room has a size to convert it with.
+    const spot = target
+      ? spotAt(room, { x: target.x, y: target.y }, target.height)
+      : (position as PlanPoint)
+    return c.json(aimHeads(room, fixtureIds, spot, target?.id), 200)
   })

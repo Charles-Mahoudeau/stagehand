@@ -20,6 +20,9 @@ export const rooms = sqliteTable(
     id: integer('id').primaryKey({ autoIncrement: true }),
     name: text('name').notNull(),
     active: integer('active', { mode: 'boolean' }).notNull().default(false),
+    // Floor size in metres; with fixture heights it lets aim be worked out in 3D.
+    width: real('width'),
+    depth: real('depth'),
   },
   (t) => [
     uniqueIndex('rooms_name_unique').on(sql`lower(${t.name})`),
@@ -42,6 +45,8 @@ export const fixtures = sqliteTable(
     // Fractions of the room's width (0 = left wall) and depth (0 = stage side).
     x: real('x'),
     y: real('y'),
+    // Metres above the floor; moving heads hang from the ceiling.
+    height: real('height'),
   },
   (t) => [
     uniqueIndex('fixtures_room_name_unique').on(t.roomId, sql`lower(${t.name})`),

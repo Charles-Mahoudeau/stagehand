@@ -1,4 +1,4 @@
-import { MIN_CALIBRATION_POINTS, panDegrees, tiltDegrees } from '@stagehand/shared'
+import { panDegrees, tiltDegrees } from '@stagehand/shared'
 import { useMutation } from '@tanstack/react-query'
 import { cn } from 'cn'
 import { type ReactNode, useState } from 'react'
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { useLive } from '@/lib/live'
 import { outputColor } from '@/lib/patch'
-import type { Fixture, Room } from '@/lib/rooms'
+import { type Fixture, type Room, useFixtureMutations, useRoomMutations } from '@/lib/rooms'
 import {
   aim,
   type CalibrationPoint,
@@ -20,6 +20,7 @@ import {
   useCalibrationMutations,
 } from '@/lib/targets'
 import { JogPad } from './jog-pad'
+import { NumberField } from './number-field'
 import { BeamLine, CoverageOutline, PlanMarker, PlanSvg } from './plan-overlay'
 
 type Props = {
@@ -38,7 +39,7 @@ type Props = {
 const BEAM = 'rgb(255 236 200)'
 
 // Calibrating a moving head: jog its beam onto spots marked on the plan and
-// save pan/tilt for each. Four saved spots let it aim anywhere.
+// save pan/tilt for each. A few saved spots let it aim anywhere.
 export function CalibratePanel(props: Props) {
   const { room, fixtures, points, head, point, onSelectPoint, modeSwitch } = props
   const { dmx, setChannels } = useLive()
@@ -46,7 +47,7 @@ export function CalibratePanel(props: Props) {
   const test = useMutation({
     mutationFn: (position: { x: number; y: number }) => aim(room.id, [head?.id ?? 0], { position }),
   })
-  const calibration = head && headCalibration(head, points)
+  const calibration = head && headCalibration(head, points, room)
   const channels = room.active ? dmx?.channels : null
 
   const addPoint = () => {
@@ -133,8 +134,9 @@ export function CalibratePanel(props: Props) {
             </Button>
             <p className="px-2.5 pt-1.5 pb-1 text-xs leading-normal text-muted-foreground">
               Mark spots you can find in the room, spread to the edges of where the head has to
-              reach. {MIN_CALIBRATION_POINTS} saved points are enough. Picking a point moves{' '}
-              {head.name} to it.
+              reach. {calibration.needed} saved points are enough
+              {calibration.geometry ? '' : ' until the room size and head height are set'}; more
+              spots make the aim steadier. Picking a point moves {head.name} to it.
             </p>
           </div>
         )}
@@ -248,7 +250,7 @@ function HeadList({ room, heads, points, head, onSelectHead }: Props) {
             <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
               <span className="truncate">{h.name}</span>
               <span className="text-xs text-muted-foreground">
-                {fitSummary(headCalibration(h, points))}
+                {fitSummary(headCalibration(h, points, room))}
               </span>
             </span>
             <span className="font-mono text-[11px] text-muted-foreground">DMX {h.address}</span>
@@ -362,13 +364,13 @@ function PointInspector({
           <span className="font-mono text-xs">
             {fit
               ? `±${fit.rms.toFixed(1)}° · ${calibration.saved.length} points`
-              : calibration.saved.length >= MIN_CALIBRATION_POINTS
+              : calibration.saved.length >= calibration.needed
                 ? 'Doesn’t fit'
                 : 'Not yet'}
           </span>
         </div>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(0,1fr))] gap-1">
-          {Array.from({ length: Math.max(MIN_CALIBRATION_POINTS, calibration.saved.length) }).map(
+          {Array.from({ length: Math.max(calibration.needed, calibration.saved.length) }).map(
             (_, i) => (
               <span
                 // biome-ignore lint/suspicious/noArrayIndexKey: a fixed row of progress pips
@@ -384,23 +386,86 @@ function PointInspector({
         <span className="text-xs leading-normal text-muted-foreground">
           {!fit
             ? calibrationIssue(head, calibration)
-            : worst && fit.rms >= 0.5
-              ? `Worst point ${worst.name}, off by ${Math.max(...fit.errors).toFixed(1)}°. Check it, or add a point near it.`
-              : 'Every saved point agrees with the fit.'}
-        </span>
-        <span className="border-t border-border pt-2.5 text-xs leading-normal text-muted-foreground">
-          Fitted on the floor plan, without measurements. Object heights are ignored until the room
-          has a size.
+            : calibration.geometry && fit.rms >= 1.5
+              ? 'The points fit loosely. Check the room size and head height below, and each point’s aim.'
+              : worst && fit.rms >= 0.5
+                ? `Worst point ${worst.name}, off by ${Math.max(...fit.errors).toFixed(1)}°. Check it, or add a point near it.`
+                : 'Every saved point agrees with the fit.'}
         </span>
       </div>
+
+      <GeometryCard room={room} head={head} geometry={calibration.geometry} />
     </aside>
+  )
+}
+
+// Measurements that turn the fit from a guess into a check: the room's floor
+// size and how high the head hangs, in metres.
+function GeometryCard({
+  room,
+  head,
+  geometry,
+}: {
+  room: Room
+  head: Fixture
+  geometry: HeadCalibration['geometry']
+}) {
+  const { resize } = useRoomMutations()
+  const { update } = useFixtureMutations(room.id)
+  const [invalid, setInvalid] = useState<string | null>(null)
+  const error = invalid ?? resize.error?.message ?? update.error?.message
+
+  // Empty clears the measurement.
+  const metres = (text: string, max: number, then: (v: number | null) => void) => {
+    const v = Number(text)
+    if (text !== '' && (Number.isNaN(v) || v <= 0 || v > max)) {
+      return setInvalid(`Measurements are in metres, above 0 and up to ${max}`)
+    }
+    setInvalid(null)
+    then(text === '' ? null : v)
+  }
+  const shown = (v: number | null) => (v === null ? '' : String(v))
+
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl bg-surface-1 p-4">
+      <span className="text-[13px] font-semibold">Measurements</span>
+      <div className="grid grid-cols-3 gap-2.5">
+        <NumberField
+          id="room-width"
+          label="Width (m)"
+          placeholder="?"
+          value={shown(room.width)}
+          onCommit={(t) => metres(t, 1000, (width) => resize.mutate({ id: room.id, width }))}
+        />
+        <NumberField
+          id="room-depth"
+          label="Depth (m)"
+          placeholder="?"
+          value={shown(room.depth)}
+          onCommit={(t) => metres(t, 1000, (depth) => resize.mutate({ id: room.id, depth }))}
+        />
+        <NumberField
+          id="head-height"
+          label="Head (m)"
+          placeholder="?"
+          value={shown(head.height)}
+          onCommit={(t) => metres(t, 100, (height) => update.mutate({ id: head.id, height }))}
+        />
+      </div>
+      <span className="text-xs leading-normal text-muted-foreground">
+        {geometry
+          ? 'Used to fit the head and to aim at object heights. A wrong figure shows up as a looser fit.'
+          : 'Floor width and depth, and how high the head hangs above the floor. Without all three the fit has to guess them, which needs more points and aims less well.'}
+      </span>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+    </div>
   )
 }
 
 export function fitSummary(c: HeadCalibration) {
   if (c.fit) return `${c.saved.length} points · ±${c.fit.rms.toFixed(1)}°`
-  if (c.saved.length >= MIN_CALIBRATION_POINTS) return `${c.saved.length} points · doesn’t fit`
-  if (c.saved.length) return `${c.saved.length} of ${MIN_CALIBRATION_POINTS} points`
+  if (c.saved.length >= c.needed) return `${c.saved.length} points · doesn’t fit`
+  if (c.saved.length) return `${c.saved.length} of ${c.needed} points`
   return 'Not calibrated'
 }
 

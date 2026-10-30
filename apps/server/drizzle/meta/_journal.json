@@ -15,6 +15,13 @@
       "when": 1793318501926,
       "tag": "0001_dashing_purple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793322117563,
+      "tag": "0002_loud_pet_avengers",
+      "breakpoints": true
     }
   ]
 }

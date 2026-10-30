@@ -8,17 +8,27 @@ import { createRouter } from '../lib/router'
 import { errorResponse, jsonResponse as json } from '../lib/schemas'
 import { broadcast } from '../ws'
 
+// Metres. Heads aim by the room's real proportions once both are set.
+const SizeSchema = z.number().positive().max(1000).nullable()
+
 const RoomSchema = z
   .object({
     id: z.number().int().openapi({ example: 1 }),
     name: z.string().openapi({ example: 'Wakanda' }),
     active: z.boolean().openapi({ description: 'Whether this is the room the server is driving' }),
+    width: SizeSchema.openapi({ description: 'Floor width in metres; null = not measured' }),
+    depth: SizeSchema.openapi({ description: 'Floor depth in metres; null = not measured' }),
   })
   .openapi('Room')
 
-const RoomInputSchema = z
-  .object({ name: z.string().trim().min(1).max(100).openapi({ example: 'Wakanda' }) })
-  .openapi('RoomInput')
+const NameSchema = z.string().trim().min(1).max(100).openapi({ example: 'Wakanda' })
+
+const RoomInputSchema = z.object({ name: NameSchema }).openapi('RoomInput')
+
+const RoomUpdateSchema = z
+  .object({ name: NameSchema, width: SizeSchema, depth: SizeSchema })
+  .partial()
+  .openapi('RoomUpdate')
 
 export const RoomParams = z.object({
   roomId: z.coerce
@@ -64,13 +74,13 @@ const renameRoom = createRoute({
   method: 'patch',
   path: '/rooms/{roomId}',
   tags: ['Rooms'],
-  summary: 'Rename a room',
+  summary: 'Rename a room or set its size',
   request: {
     params: RoomParams,
-    body: { required: true, content: { 'application/json': { schema: RoomInputSchema } } },
+    body: { required: true, content: { 'application/json': { schema: RoomUpdateSchema } } },
   },
   responses: {
-    200: json('Room renamed', RoomSchema),
+    200: json('Room updated', RoomSchema),
     404: errorResponse('No such room'),
     409: errorResponse('Name already used'),
   },
@@ -130,11 +140,20 @@ export const roomRoutes = createRouter()
   })
   .openapi(renameRoom, (c) => {
     const { roomId } = c.req.valid('param')
-    const { name } = c.req.valid('json')
-    if (!findRoom(roomId)) return c.json({ error: 'Room not found' }, 404)
-    if (nameTaken(name, roomId)) return c.json({ error: `A room named "${name}" exists` }, 409)
-    const room = db.update(rooms).set({ name }).where(eq(rooms.id, roomId)).returning().get()
+    const changes = c.req.valid('json')
+    const old = findRoom(roomId)
+    if (!old) return c.json({ error: 'Room not found' }, 404)
+    if (changes.name !== undefined && nameTaken(changes.name, roomId)) {
+      return c.json({ error: `A room named "${changes.name}" exists` }, 409)
+    }
+    // Drizzle rejects an empty SET, so an empty body is a no-op.
+    if (Object.keys(changes).length === 0) return c.json(old, 200)
+    const room = db.update(rooms).set(changes).where(eq(rooms.id, roomId)).returning().get()
     broadcast({ type: 'rooms.changed' })
+    // The size is part of every head's calibration.
+    if (changes.width !== undefined || changes.depth !== undefined) {
+      broadcast({ type: 'calibration.changed', roomId })
+    }
     return c.json(room, 200)
   })
   .openapi(deleteRoom, (c) => {

@@ -4,21 +4,52 @@
 // and saving pan/tilt for each. `fitHead` turns those into a model of where
 // the head hangs, so `aimAt` can work out pan/tilt for any other spot.
 //
-// Everything is in plan units (fractions of the room's width and depth), so no
-// measurements are needed. The model is still a 3D one: the head sits at
-// (hx, hy) at some height above the floor, and the room's depth/width ratio
-// is fitted too. Once the room has a size in metres, that ratio becomes known
-// and object heights can be taken into account.
+// Everything is in plan units (fractions of the room's width and depth). The
+// model is a 3D one: the head sits at (hx, hy) at some height above the floor,
+// and the room has a depth/width ratio.
+//
+// With the room's size and the head's hanging height known (`Geometry`), those
+// two are fixed, the head's plan position is only nudged from where it was
+// patched, and what is left (pan/tilt offsets, which way they turn, a little
+// lean) is well over-determined by four points. Object heights count too.
+// Without them the fit has to find height and ratio as well, which takes more
+// points and is much less reliable.
 
 // Travel of the Wakanda moving heads (docs/rooms/wakanda/README.md), in degrees.
 export const PAN_RANGE = 540
 export const TILT_RANGE = 270
 export const MAX_16 = 65535
 
-// Fewer than this leaves the model underdetermined (6 unknowns, 2 equations a point).
-export const MIN_CALIBRATION_POINTS = 4
-
 export type PlanPoint = { x: number; y: number }
+// A spot with a height above the floor, in room widths (0 = on the floor).
+export type Spot = PlanPoint & { z?: number }
+
+// What the room's size and the head's hanging height pin down. `height` is in
+// room widths, `aspect` is room depth / width.
+export type Geometry = { aspect: number; height: number }
+export type RoomSize = { width: number | null; depth: number | null }
+
+const positive = (v: number | null | undefined): v is number =>
+  typeof v === 'number' && Number.isFinite(v) && v > 0
+
+// The geometry of a head in a room, or null while the room has no size or the
+// head no height (metres).
+export function headGeometry(room: RoomSize, headHeight: number | null): Geometry | null {
+  if (!positive(room.width) || !positive(room.depth) || !positive(headHeight)) return null
+  return { aspect: room.depth / room.width, height: headHeight / room.width }
+}
+
+// A plan spot lifted to `height` metres, when the room has a width to convert
+// it with. Otherwise it stays on the floor.
+export function spotAt(room: RoomSize, p: PlanPoint, height: number | null): Spot {
+  return positive(room.width) && positive(height) ? { ...p, z: height / room.width } : p
+}
+
+// Fewer points than this leaves the model underdetermined, or so loose that
+// jogging error moves the aim by many degrees. Two equations a point, against
+// 6 unknowns with a known geometry or 8 without; simulated, 4 points with a
+// geometry aim about as well as 6 without.
+export const minCalibrationPoints = (geometry?: Geometry | null) => (geometry ? 4 : 6)
 // Pan and tilt as 16-bit DMX values (coarse·256 + fine).
 export type PanTilt = { pan: number; tilt: number }
 export type CalibrationSample = PlanPoint & PanTilt
@@ -67,10 +98,10 @@ const wrap = (deg: number) => deg - 360 * Math.ceil((deg - 180) / 360)
 
 // Direction from the head to a floor spot, in the head's own frame: azimuth
 // round its axis, and angle away from that axis, both in degrees.
-function direction(m: HeadModel, p: PlanPoint) {
+function direction(m: HeadModel, p: Spot) {
   const dx = p.x - m.hx
   const dy = (p.y - m.hy) * m.aspect
-  const dz = -m.height
+  const dz = (p.z ?? 0) - m.height
   // Undo the base's lean: about x, then about y.
   const ax = m.leanX / DEG
   const ay = m.leanY / DEG
@@ -86,7 +117,7 @@ function direction(m: HeadModel, p: PlanPoint) {
 
 // The two pan/tilt pairs (degrees, before wrapping pan) that point at `p`: a
 // head reaches every direction twice, once flipped over by 180° of pan.
-function solutions(m: HeadModel, p: PlanPoint) {
+function solutions(m: HeadModel, p: Spot) {
   const { azimuth, offVertical } = direction(m, p)
   const pan = m.panOffset + m.panSign * azimuth
   const tilt = m.tiltSign * offVertical
@@ -114,9 +145,15 @@ function sampleError(m: HeadModel, s: CalibrationSample) {
 // head wins unless the samples clearly say otherwise.
 const LEAN_COST = 0.2
 
+// Likewise for how far the fitted head sits from where it was patched, per
+// room width: a plan is drawn by eye, so some slack, but not the freedom to
+// absorb a badly jogged point by moving the head across the room.
+const POSITION_COST = 15
+
 // The residual vector the solver minimises: pan and tilt error per sample,
-// each on the branch that fits it best, then the lean.
-function residuals(m: HeadModel, samples: CalibrationSample[]) {
+// each on the branch that fits it best, then the lean and the head's distance
+// from where it was patched (`near`).
+function residuals(m: HeadModel, samples: CalibrationSample[], near: PlanPoint | null) {
   const out: number[] = []
   for (const s of samples) {
     const pan = panDegrees(s.pan)
@@ -137,6 +174,7 @@ function residuals(m: HeadModel, samples: CalibrationSample[]) {
     out.push(...best)
   }
   out.push(m.leanX * LEAN_COST, m.leanY * LEAN_COST)
+  if (near) out.push((m.hx - near.x) * POSITION_COST, (m.hy - near.y) * POSITION_COST)
   return out
 }
 
@@ -159,27 +197,30 @@ const toModel = (p: Params, panSign: 1 | -1, tiltSign: 1 | -1): HeadModel => ({
 
 const sumSquares = (r: number[]) => r.reduce((a, v) => a + v * v, 0)
 
-// Levenberg–Marquardt with a numeric Jacobian. Small problem (8 unknowns), so
-// the normal equations are solved directly.
-function solve(start: Params, panSign: 1 | -1, tiltSign: 1 | -1, samples: CalibrationSample[]) {
+// Levenberg–Marquardt with a numeric Jacobian over the parameters in `free`
+// (the rest stay at their starting values). Small problem, so the normal
+// equations are solved directly.
+function solve(
+  start: Params,
+  panSign: 1 | -1,
+  tiltSign: 1 | -1,
+  samples: CalibrationSample[],
+  near: PlanPoint | null,
+  free: number[],
+) {
+  const evaluate = (q: Params) => residuals(toModel(q, panSign, tiltSign), samples, near)
   let p = [...start] as Params
-  let r = residuals(toModel(p, panSign, tiltSign), samples)
+  let r = evaluate(p)
   let cost = sumSquares(r)
   let lambda = 1e-2
   for (let iter = 0; iter < 200; iter++) {
-    const J = p.map((_, j) => {
+    const J = free.map((j) => {
       const h = 1e-6 * Math.max(1, Math.abs(p[j] as number))
       const q = [...p] as Params
       q[j] = (q[j] as number) + h
-      const rq = residuals(toModel(q, panSign, tiltSign), samples)
-      return rq.map((v, i) => (v - (r[i] as number)) / h)
+      return evaluate(q).map((v, i) => (v - (r[i] as number)) / h)
     })
-    const n = p.length
-    const A = Array.from({ length: n }, (_, a) =>
-      Array.from({ length: n }, (_, b) =>
-        (J[a] as number[]).reduce((s, v, i) => s + v * ((J[b] as number[])[i] as number), 0),
-      ),
-    )
+    const A = J.map((a) => J.map((b) => a.reduce((s, v, i) => s + v * (b[i] as number), 0)))
     const g = J.map((col) => col.reduce((s, v, i) => s + v * (r[i] as number), 0))
 
     let improved = false
@@ -193,8 +234,11 @@ function solve(start: Params, panSign: 1 | -1, tiltSign: 1 | -1, samples: Calibr
         lambda *= 10
         continue
       }
-      const q = p.map((v, j) => v + (step[j] as number)) as Params
-      const rq = residuals(toModel(q, panSign, tiltSign), samples)
+      const q = [...p] as Params
+      free.forEach((j, k) => {
+        q[j] = (p[j] as number) + (step[k] as number)
+      })
+      const rq = evaluate(q)
       const cq = sumSquares(rq)
       if (cq < cost) {
         const done = cost - cq < 1e-12 * (1 + cost)
@@ -264,44 +308,58 @@ export function repeatedAims(samples: CalibrationSample[]): (number | null)[] {
 
 // A head hanging over or near the room, with sane proportions. Inconsistent
 // samples drive the solver to a head far away, which aims everywhere alike.
-const plausible = (m: HeadModel) =>
+// A known geometry has sane proportions already.
+const plausible = (m: HeadModel, known: boolean) =>
   m.hx > -1 &&
   m.hx < 2 &&
   m.hy > -1 &&
   m.hy < 2 &&
-  m.height < 5 &&
-  m.aspect > 0.05 &&
-  m.aspect < 20 &&
+  (known || (m.height < 5 && m.aspect > 0.05 && m.aspect < 20)) &&
   Math.abs(m.leanX) < 30 &&
   Math.abs(m.leanY) < 30
 
-// Fits a head model to its calibration samples. `near` is roughly where the
-// head hangs on the plan (its fixture position), used as a starting guess.
-// Null with fewer than MIN_CALIBRATION_POINTS samples, when some repeat an
-// aim (see repeatedAims), or when they don't agree on any head position.
-export function fitHead(samples: CalibrationSample[], near?: PlanPoint | null): HeadFit | null {
-  if (samples.length < MIN_CALIBRATION_POINTS) return null
+const FREE_UNKNOWN_GEOMETRY = [0, 1, 2, 3, 4, 5, 6, 7]
+const FREE_KNOWN_GEOMETRY = [0, 1, 4, 5, 6, 7]
+
+// Fits a head model to its calibration samples. `near` is where the head is
+// patched on the plan: the fit starts there and is kept close to it.
+// `geometry` fixes the head's height and the room's proportions when known.
+// Null with fewer than minCalibrationPoints samples, when some repeat an aim
+// (see repeatedAims), or when they don't agree on any head position.
+export function fitHead(
+  samples: CalibrationSample[],
+  near?: PlanPoint | null,
+  geometry?: Geometry | null,
+): HeadFit | null {
+  if (samples.length < minCalibrationPoints(geometry)) return null
   if (repeatedAims(samples).some((j) => j !== null)) return null
   const cx = near?.x ?? samples.reduce((a, s) => a + s.x, 0) / samples.length
   const cy = near?.y ?? samples.reduce((a, s) => a + s.y, 0) / samples.length
   const first = samples[0] as CalibrationSample
+  const heights = geometry ? [geometry.height] : [0.2, 0.5, 1]
+  const logAspect = Math.log(geometry?.aspect ?? 1)
+  const free = geometry ? FREE_KNOWN_GEOMETRY : FREE_UNKNOWN_GEOMETRY
 
   let best: { model: HeadModel; cost: number } | null = null
   for (const panSign of [1, -1] as const) {
     for (const tiltSign of [1, -1] as const) {
-      for (const height of [0.2, 0.5, 1]) {
+      for (const height of heights) {
         for (const flip of [0, 180]) {
           // Start with the first sample exactly on target.
-          const guess = toModel([cx, cy, Math.log(height), 0, 0, 0, 0, 0], panSign, tiltSign)
+          const guess = toModel(
+            [cx, cy, Math.log(height), logAspect, 0, 0, 0, 0],
+            panSign,
+            tiltSign,
+          )
           const { azimuth, offVertical } = direction(guess, first)
           const panOffset = panDegrees(first.pan) - panSign * azimuth - flip
           const tiltOffset = tiltDegrees(first.tilt) - (flip ? -1 : 1) * tiltSign * offVertical
-          const start: Params = [cx, cy, Math.log(height), 0, panOffset, tiltOffset, 0, 0]
-          const { params, cost } = solve(start, panSign, tiltSign, samples)
+          const start: Params = [cx, cy, Math.log(height), logAspect, panOffset, tiltOffset, 0, 0]
+          const { params, cost } = solve(start, panSign, tiltSign, samples, near ?? null, free)
           const model = toModel(params, panSign, tiltSign)
           // A head far off, or miles up, can match samples by pointing nearly
           // the same way at all of them; it aims nowhere useful.
-          if (plausible(model) && (!best || cost < best.cost)) best = { model, cost }
+          if (plausible(model, !!geometry) && (!best || cost < best.cost)) best = { model, cost }
         }
       }
     }
@@ -320,7 +378,7 @@ export function fitHead(samples: CalibrationSample[], near?: PlanPoint | null): 
 // top, for per-object corrections.
 export function aimAt(
   model: HeadModel,
-  p: PlanPoint,
+  p: Spot,
   from?: PanTilt | null,
   nudge?: { pan: number; tilt: number } | null,
 ): PanTilt | null {

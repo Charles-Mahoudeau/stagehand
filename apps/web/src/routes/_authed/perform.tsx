@@ -67,7 +67,10 @@ function AimBoard({ room }: { room: Room }) {
   const [recent, setRecent] = useState<Target[]>([])
 
   const heads = (fixtures.data ?? []).filter(isHead)
-  const calibrations = heads.map((h) => ({ head: h, ...headCalibration(h, points.data ?? []) }))
+  const calibrations = heads.map((h) => ({
+    head: h,
+    ...headCalibration(h, points.data ?? [], room),
+  }))
   const calibrated = calibrations.filter((c) => c.fit).map((c) => c.head)
   // Every calibrated head follows until some are picked.
   const selected = calibrated.filter((h) => (picked ?? calibrated.map((c) => c.id)).includes(h.id))

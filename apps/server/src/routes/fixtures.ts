@@ -26,6 +26,13 @@ const AddressSchema = z
   .max(DMX_CHANNELS)
   .openapi({ description: 'First DMX channel (1-based)', example: 1 })
 
+const HeightSchema = z
+  .number()
+  .positive()
+  .max(100)
+  .nullable()
+  .openapi({ description: 'Metres above the floor; null = not measured', example: 5 })
+
 const FixtureSchema = z
   .object({
     id: z.number().int(),
@@ -35,6 +42,7 @@ const FixtureSchema = z
     address: AddressSchema,
     channelCount: z.number().int().openapi({ description: 'Channels used from `address` on' }),
     position: PositionSchema.nullable(),
+    height: HeightSchema,
   })
   .openapi('Fixture')
 
@@ -46,6 +54,7 @@ const FixtureCreateSchema = z
     type: TypeSchema,
     address: AddressSchema,
     position: PositionSchema.nullable().default(null),
+    height: HeightSchema.default(null),
   })
   .refine(({ type, address }) => fitsUniverse(type, address), {
     message: `Fixture must end at or before channel ${DMX_CHANNELS}`,
@@ -59,6 +68,7 @@ const FixtureUpdateSchema = z
     type: TypeSchema,
     address: AddressSchema,
     position: PositionSchema.nullable(),
+    height: HeightSchema,
   })
   .partial()
   .openapi('FixtureUpdate')

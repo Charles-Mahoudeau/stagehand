@@ -1,4 +1,4 @@
-import { aimAt, insideCoverage, type PlanPoint } from '@stagehand/shared'
+import { aimAt, insideCoverage, type Spot, spotAt } from '@stagehand/shared'
 import { useMutation } from '@tanstack/react-query'
 import { cn } from 'cn'
 import { type ReactNode, useState } from 'react'
@@ -15,6 +15,7 @@ import {
   type Target,
   useTargetMutations,
 } from '@/lib/targets'
+import { NumberField } from './number-field'
 import { CoverageOutline, PlanMarker, PlanSvg } from './plan-overlay'
 
 type Props = {
@@ -32,7 +33,7 @@ type Props = {
 export type Reach = 'inside' | 'outside' | 'unreachable' | 'uncalibrated'
 
 // Whether a head can light a spot, and how much to trust it.
-export function reach(c: HeadCalibration, p: PlanPoint): Reach {
+export function reach(c: HeadCalibration, p: Spot): Reach {
   if (!c.fit) return 'uncalibrated'
   if (!aimAt(c.fit.model, p)) return 'unreachable'
   return insideCoverage(c.hull, p) ? 'inside' : 'outside'
@@ -49,11 +50,12 @@ const REACH_LABEL: Record<Reach, string> = {
 export function ObjectsPanel(props: Props) {
   const { room, fixtures, heads, points, targets, selected, onSelect, modeSwitch } = props
   const { create, update } = useTargetMutations(room.id)
-  const calibrations = heads.map((h) => ({ head: h, ...headCalibration(h, points) }))
+  const calibrations = heads.map((h) => ({ head: h, ...headCalibration(h, points, room) }))
   const reachable = (t: Target) =>
-    calibrations.some(
-      (c) => reach(c, t.position) === 'inside' || reach(c, t.position) === 'outside',
-    )
+    calibrations.some((c) => {
+      const r = reach(c, spotAt(room, t.position, t.height))
+      return r === 'inside' || r === 'outside'
+    })
 
   const add = () =>
     create.mutate(
@@ -265,8 +267,9 @@ function ObjectInspector({
           />
         </div>
         <span className="text-xs leading-normal text-muted-foreground">
-          Heads aim at this height once the room has a size. Until then they aim at the floor below
-          it; nudge each head to correct.
+          {room.width && room.depth
+            ? 'Heads aim at this height above the floor.'
+            : 'Heads aim at this height once the room has a size (set it under Calibrate). Until then they aim at the floor below it; nudge each head to correct.'}
         </span>
         {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
@@ -277,7 +280,7 @@ function ObjectInspector({
           <span className="text-[13px] text-muted-foreground">No moving heads in this room.</span>
         )}
         {calibrations.map((c) => {
-          const r = reach(c, target.position)
+          const r = reach(c, spotAt(room, target.position, target.height))
           const n = target.nudges.find((x) => x.fixtureId === c.head.id)
           return (
             <div key={c.head.id} className="flex flex-col gap-2">
@@ -433,28 +436,6 @@ function NudgeButton({
     >
       {children}
     </Button>
-  )
-}
-
-function NumberField(props: {
-  id: string
-  label: string
-  value: string
-  placeholder?: string
-  onCommit: (v: string) => void
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={props.id}>{props.label}</Label>
-      <CommitInput
-        id={props.id}
-        inputMode="decimal"
-        className="font-mono"
-        placeholder={props.placeholder}
-        value={props.value}
-        onCommit={props.onCommit}
-      />
-    </div>
   )
 }
 

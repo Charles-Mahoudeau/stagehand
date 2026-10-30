@@ -14,6 +14,7 @@ export type FixtureInput = {
   type: FixtureType
   address: number
   position: Position | null
+  height?: number | null
 }
 
 // Turns an error response's `{ error }` into a thrown Error.
@@ -58,6 +59,18 @@ export function useRoomMutations() {
     rename: useMutation({
       mutationFn: async ({ id, name }: { id: number; name: string }) => {
         const res = await api.rooms[':roomId'].$patch({ param: param(id), json: { name } })
+        if (!res.ok) throw await failure(res)
+        return res.json()
+      },
+      onSuccess,
+    }),
+    // Floor size in metres; null clears it.
+    resize: useMutation({
+      mutationFn: async ({
+        id,
+        ...json
+      }: { id: number } & Partial<{ width: number | null; depth: number | null }>) => {
+        const res = await api.rooms[':roomId'].$patch({ param: param(id), json })
         if (!res.ok) throw await failure(res)
         return res.json()
       },

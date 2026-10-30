@@ -3,8 +3,10 @@ import {
   coarseFine,
   coverage,
   fitHead,
+  type Geometry,
   type HeadFit,
-  MIN_CALIBRATION_POINTS,
+  headGeometry,
+  minCalibrationPoints,
   type PanTilt,
   type PlanPoint,
   repeatedAims,
@@ -12,7 +14,7 @@ import {
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { InferResponseType } from 'hono/client'
 import { api } from '@/lib/api'
-import { type Fixture, failure } from '@/lib/rooms'
+import { type Fixture, failure, type Room } from '@/lib/rooms'
 
 export type Target = InferResponseType<
   (typeof api.rooms)[':roomId']['targets']['$get'],
@@ -202,18 +204,25 @@ export async function aim(
 
 export const isHead = (f: Fixture) => f.type === 'moving_head'
 
-// A head's saved calibration points, the fit through them (null under four
-// or when they don't fit), the floor area they cover, and saved points that
-// repeat an earlier point's aim (keyed by point id).
+// A head's saved calibration points, the fit through them (null under the
+// minimum or when they don't fit), the floor area they cover, and saved points
+// that repeat an earlier point's aim (keyed by point id). `geometry` is what
+// the room's size and the head's height pin down, null while either is missing.
 export type HeadCalibration = {
   points: CalibrationPoint[]
   saved: CalibrationPoint[]
+  geometry: Geometry | null
+  needed: number
   fit: HeadFit | null
   hull: PlanPoint[]
   repeats: Map<number, CalibrationPoint>
 }
 
-export function headCalibration(head: Fixture, points: CalibrationPoint[]): HeadCalibration {
+export function headCalibration(
+  head: Fixture,
+  points: CalibrationPoint[],
+  room: Pick<Room, 'width' | 'depth'>,
+): HeadCalibration {
   const own = points.filter((p) => p.fixtureId === head.id)
   const saved = own.filter((p) => p.pan !== null && p.tilt !== null)
   const samples: CalibrationSample[] = saved.map((p) => ({
@@ -227,10 +236,13 @@ export function headCalibration(head: Fixture, points: CalibrationPoint[]): Head
     const earlier = j === null ? undefined : saved[j]
     if (point && earlier) repeats.set(point.id, earlier)
   })
+  const geometry = headGeometry(room, head.height)
   return {
     points: own,
     saved,
-    fit: cachedFit(samples, head.position),
+    geometry,
+    needed: minCalibrationPoints(geometry),
+    fit: cachedFit(samples, head.position, geometry),
     hull: coverage(saved.map((p) => p.position)),
     repeats,
   }
@@ -239,11 +251,15 @@ export function headCalibration(head: Fixture, points: CalibrationPoint[]): Head
 // Fits are slow-ish (tens of ms) and pages re-render with every DMX frame, so
 // keep the last few by their inputs.
 const fits = new Map<string, HeadFit | null>()
-function cachedFit(samples: CalibrationSample[], near: PlanPoint | null) {
-  const key = JSON.stringify([samples, near])
+function cachedFit(
+  samples: CalibrationSample[],
+  near: PlanPoint | null,
+  geometry: Geometry | null,
+) {
+  const key = JSON.stringify([samples, near, geometry])
   if (!fits.has(key)) {
     if (fits.size >= 16) fits.delete(fits.keys().next().value as string)
-    fits.set(key, fitHead(samples, near))
+    fits.set(key, fitHead(samples, near, geometry))
   }
   return fits.get(key) ?? null
 }
@@ -251,14 +267,16 @@ function cachedFit(samples: CalibrationSample[], near: PlanPoint | null) {
 // Why a head can't aim yet, in a sentence, or null once it has a fit.
 export function calibrationIssue(head: Fixture, c: HeadCalibration): string | null {
   if (c.fit) return null
-  const missing = MIN_CALIBRATION_POINTS - c.saved.length
+  const missing = c.needed - c.saved.length
   if (missing > 0)
     return `Save ${missing} more ${missing === 1 ? 'point' : 'points'} to aim ${head.name}.`
   const [[id, earlier] = []] = c.repeats
   const point = c.saved.find((p) => p.id === id)
   if (point && earlier)
     return `${point.name} has the same aim as ${earlier.name}. Jog ${head.name} onto ${point.name} and update it.`
-  return `The saved points don't agree on where ${head.name} hangs. Check each point's aim.`
+  return c.geometry
+    ? `The saved points don't agree with the room size and ${head.name}'s height. Check them, and each point's aim.`
+    : `The saved points don't agree on where ${head.name} hangs. Check each point's aim.`
 }
 
 // A head's pan/tilt as the output has them now (16-bit each).
