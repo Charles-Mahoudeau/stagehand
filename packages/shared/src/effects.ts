@@ -250,6 +250,8 @@ export type GeneratorInfo = {
   kind: EffectKind
   // Plays once and releases, instead of running until stopped.
   once: boolean
+  // Also drives moving heads, so the groups to pick from include them.
+  withHeads?: boolean
   description: string
   defaults: Partial<Params>
   // Fields that replace the shared ones for this generator.
@@ -293,6 +295,7 @@ export const GENERATOR_INFO: Record<Generator, GeneratorInfo> = {
     name: 'Static color',
     kind: 'Ambience',
     once: false,
+    withHeads: true,
     description: 'One steady color on the lights and moving heads, optionally aimed at a target.',
     defaults: { color: '#ffffff', level: 1 },
     sections: [
@@ -306,6 +309,7 @@ export const GENERATOR_INFO: Record<Generator, GeneratorInfo> = {
     name: 'Breathing',
     kind: 'Ambience',
     once: false,
+    withHeads: true,
     description:
       'A color that swells and settles on the lights and moving heads, rolling from the stage to the back.',
     defaults: { color: '#2a4bd8', lo: 0.06, hi: 0.32 },

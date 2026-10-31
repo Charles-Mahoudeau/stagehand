@@ -107,7 +107,9 @@ export function ParamsForm({ effect, groups, targets, onChange }: Props) {
                     key={key}
                     label={field.label}
                     value={value as number[]}
-                    choices={groups.filter((g) => g.mover === (info.kind === 'Moving head'))}
+                    choices={groups.filter(
+                      (g) => info.withHeads || g.mover === (info.kind === 'Moving head'),
+                    )}
                     onChange={(v) => set('groups', v)}
                   />
                 )
