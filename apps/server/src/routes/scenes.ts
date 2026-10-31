@@ -1,10 +1,10 @@
 import { createRoute, z } from '@hono/zod-openapi'
-import { Look, SceneEffectRef, SceneSchema } from '@stagehand/shared'
+import { Look, SceneEffectRef, SceneSchema, uniqueSlug } from '@stagehand/shared'
 import { and, eq, inArray, ne, sql } from 'drizzle-orm'
 import { db } from '../db'
 import { effects, scenes } from '../db/schema'
 import { createRouter } from '../lib/router'
-import { errorResponse, jsonResponse as json } from '../lib/schemas'
+import { errorResponse, idParam, idSchema, jsonResponse as json } from '../lib/schemas'
 import { playback } from '../playback'
 import { broadcast } from '../ws'
 import { findRoom, RoomParams } from './rooms'
@@ -15,6 +15,7 @@ const FadeSchema = z.number().min(0).max(120)
 const SceneCreateSchema = z
   .object({
     name: NameSchema,
+    id: idSchema('night').optional().openapi({ description: 'Made from the name when omitted' }),
     tag: z.string().trim().max(24).optional(),
     look: Look.optional(),
     effects: z.array(SceneEffectRef).optional(),
@@ -34,11 +35,7 @@ const SceneUpdateSchema = z
   .openapi('SceneUpdate')
 
 const SceneParams = RoomParams.extend({
-  sceneId: z.coerce
-    .number()
-    .int()
-    .positive()
-    .openapi({ param: { name: 'sceneId', in: 'path' }, example: 1 }),
+  sceneId: idParam('sceneId', 'night'),
 })
 
 const listScenes = createRoute({
@@ -66,7 +63,7 @@ const addScene = createRoute({
     201: json('Scene added', SceneSchema),
     400: errorResponse('An effect is not in this room'),
     404: errorResponse('No such room'),
-    409: errorResponse('Name already used in this room'),
+    409: errorResponse('Name or ID already used in this room'),
   },
 })
 
@@ -111,14 +108,14 @@ const goScene = createRoute({
   },
 })
 
-const find = (roomId: number, id: number) =>
+const find = (roomId: string, id: string) =>
   db
     .select()
     .from(scenes)
     .where(and(eq(scenes.roomId, roomId), eq(scenes.id, id)))
     .get()
 
-function nameTaken(roomId: number, name: string, exceptId?: number) {
+function nameTaken(roomId: string, name: string, exceptId?: string) {
   const conditions = [eq(scenes.roomId, roomId), sql`lower(${scenes.name}) = lower(${name})`]
   if (exceptId !== undefined) conditions.push(ne(scenes.id, exceptId))
   return !!db
@@ -131,7 +128,7 @@ function nameTaken(roomId: number, name: string, exceptId?: number) {
 const nameConflict = (name: string) => ({ error: `A scene named "${name}" exists in this room` })
 
 // True when every referenced effect belongs to the room.
-function effectsExist(roomId: number, refs: { effectId: number }[]) {
+function effectsExist(roomId: string, refs: { effectId: string }[]) {
   const ids = [...new Set(refs.map((r) => r.effectId))]
   if (ids.length === 0) return true
   const found = db
@@ -142,7 +139,7 @@ function effectsExist(roomId: number, refs: { effectId: number }[]) {
   return found.length === ids.length
 }
 
-const changed = (roomId: number) => {
+const changed = (roomId: string) => {
   playback.invalidate()
   broadcast({ type: 'scenes.changed', roomId })
 }
@@ -167,9 +164,13 @@ export const sceneRoutes = createRouter()
     if (!effectsExist(roomId, input.effects ?? [])) {
       return c.json({ error: 'An effect is not in this room' }, 400)
     }
+    if (input.id !== undefined && find(roomId, input.id)) {
+      return c.json({ error: `A scene with ID "${input.id}" exists in this room` }, 409)
+    }
     const row = db
       .insert(scenes)
       .values({
+        id: input.id ?? uniqueSlug(input.name, 'scene', (s) => !!find(roomId, s)),
         roomId,
         name: input.name,
         tag: input.tag ?? '',
@@ -194,14 +195,21 @@ export const sceneRoutes = createRouter()
       return c.json({ error: 'An effect is not in this room' }, 400)
     }
     if (Object.keys(input).length === 0) return c.json(old, 200)
-    const row = db.update(scenes).set(input).where(eq(scenes.id, sceneId)).returning().get()
+    const row = db
+      .update(scenes)
+      .set(input)
+      .where(and(eq(scenes.roomId, roomId), eq(scenes.id, sceneId)))
+      .returning()
+      .get()
     changed(roomId)
     return c.json(row, 200)
   })
   .openapi(removeScene, (c) => {
     const { roomId, sceneId } = c.req.valid('param')
     if (!find(roomId, sceneId)) return c.json({ error: 'Scene not found' }, 404)
-    db.delete(scenes).where(eq(scenes.id, sceneId)).run()
+    db.delete(scenes)
+      .where(and(eq(scenes.roomId, roomId), eq(scenes.id, sceneId)))
+      .run()
     changed(roomId)
     broadcast({ type: 'cues.changed', roomId })
     return c.body(null, 204)

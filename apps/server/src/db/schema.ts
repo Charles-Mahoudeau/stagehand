@@ -10,6 +10,7 @@ import {
 } from '@stagehand/shared'
 import { sql } from 'drizzle-orm'
 import {
+  foreignKey,
   index,
   integer,
   primaryKey,
@@ -19,12 +20,15 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core'
 
+// Every id is a slug (see `Slug` in the shared package): unique among rooms,
+// and within its room for everything else, hence the (room_id, id) keys.
+
 // A room's lighting rig. Any number can be stored as templates; the server
 // drives one at a time, the active one.
 export const rooms = sqliteTable(
   'rooms',
   {
-    id: integer('id').primaryKey({ autoIncrement: true }),
+    id: text('id').primaryKey(),
     name: text('name').notNull(),
     active: integer('active', { mode: 'boolean' }).notNull().default(false),
     // Floor size in meters; with fixture heights it lets aim be worked out in 3D.
@@ -42,8 +46,8 @@ export const rooms = sqliteTable(
 export const fixtures = sqliteTable(
   'fixtures',
   {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    roomId: integer('room_id')
+    id: text('id').notNull(),
+    roomId: text('room_id')
       .notNull()
       .references(() => rooms.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
@@ -56,6 +60,7 @@ export const fixtures = sqliteTable(
     height: real('height'),
   },
   (t) => [
+    primaryKey({ columns: [t.roomId, t.id] }),
     uniqueIndex('fixtures_room_name_unique').on(t.roomId, sql`lower(${t.name})`),
     index('fixtures_room_address').on(t.roomId, t.address),
   ],
@@ -66,15 +71,13 @@ export const fixtures = sqliteTable(
 export const targets = sqliteTable(
   'targets',
   {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    roomId: integer('room_id')
+    id: text('id').notNull(),
+    roomId: text('room_id')
       .notNull()
       .references(() => rooms.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
-    // Stable identifier for scenes and the API, unique in the room.
-    slug: text('slug').notNull(),
   },
-  (t) => [uniqueIndex('targets_room_slug_unique').on(t.roomId, t.slug)],
+  (t) => [primaryKey({ columns: [t.roomId, t.id] })],
 )
 
 // Where one head points for one target, as 16-bit DMX values. Heads hang
@@ -82,16 +85,22 @@ export const targets = sqliteTable(
 export const targetPositions = sqliteTable(
   'target_positions',
   {
-    targetId: integer('target_id')
-      .notNull()
-      .references(() => targets.id, { onDelete: 'cascade' }),
-    fixtureId: integer('fixture_id')
-      .notNull()
-      .references(() => fixtures.id, { onDelete: 'cascade' }),
+    roomId: text('room_id').notNull(),
+    targetId: text('target_id').notNull(),
+    fixtureId: text('fixture_id').notNull(),
     pan: integer('pan').notNull(),
     tilt: integer('tilt').notNull(),
   },
-  (t) => [primaryKey({ columns: [t.targetId, t.fixtureId] })],
+  (t) => [
+    primaryKey({ columns: [t.roomId, t.targetId, t.fixtureId] }),
+    foreignKey({ columns: [t.roomId, t.targetId], foreignColumns: [targets.roomId, targets.id] })
+      .onUpdate('cascade')
+      .onDelete('cascade'),
+    foreignKey({
+      columns: [t.roomId, t.fixtureId],
+      foreignColumns: [fixtures.roomId, fixtures.id],
+    }).onDelete('cascade'),
+  ],
 )
 
 // A reusable effect: one generator with its parameters. Scenes and pads refer
@@ -99,8 +108,8 @@ export const targetPositions = sqliteTable(
 export const effects = sqliteTable(
   'effects',
   {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    roomId: integer('room_id')
+    id: text('id').notNull(),
+    roomId: text('room_id')
       .notNull()
       .references(() => rooms.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
@@ -109,15 +118,18 @@ export const effects = sqliteTable(
     // Shown as a pad on the Perform page.
     pad: integer('pad', { mode: 'boolean' }).notNull().default(false),
   },
-  (t) => [uniqueIndex('effects_room_name_unique').on(t.roomId, sql`lower(${t.name})`)],
+  (t) => [
+    primaryKey({ columns: [t.roomId, t.id] }),
+    uniqueIndex('effects_room_name_unique').on(t.roomId, sql`lower(${t.name})`),
+  ],
 )
 
 // A static look per DMX address plus the library effects that run under it.
 export const scenes = sqliteTable(
   'scenes',
   {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    roomId: integer('room_id')
+    id: text('id').notNull(),
+    roomId: text('room_id')
       .notNull()
       .references(() => rooms.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
@@ -126,25 +138,33 @@ export const scenes = sqliteTable(
     effects: text('effects', { mode: 'json' }).$type<SceneEffectRef[]>().notNull(),
     fade: real('fade').notNull().default(2),
   },
-  (t) => [uniqueIndex('scenes_room_name_unique').on(t.roomId, sql`lower(${t.name})`)],
+  (t) => [
+    primaryKey({ columns: [t.roomId, t.id] }),
+    uniqueIndex('scenes_room_name_unique').on(t.roomId, sql`lower(${t.name})`),
+  ],
 )
 
 // One line of the cue list: call a scene, in order.
 export const cues = sqliteTable(
   'cues',
   {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    roomId: integer('room_id')
+    id: text('id').notNull(),
+    roomId: text('room_id')
       .notNull()
       .references(() => rooms.id, { onDelete: 'cascade' }),
     position: integer('position').notNull(),
     name: text('name').notNull(),
-    sceneId: integer('scene_id')
-      .notNull()
-      .references(() => scenes.id, { onDelete: 'cascade' }),
+    sceneId: text('scene_id').notNull(),
     fade: real('fade'),
     trigger: text('trigger', { enum: CUE_TRIGGERS }).notNull().default('go'),
     delay: real('delay').notNull().default(0),
   },
-  (t) => [index('cues_room_position').on(t.roomId, t.position)],
+  (t) => [
+    primaryKey({ columns: [t.roomId, t.id] }),
+    foreignKey({
+      columns: [t.roomId, t.sceneId],
+      foreignColumns: [scenes.roomId, scenes.id],
+    }).onDelete('cascade'),
+    index('cues_room_position').on(t.roomId, t.position),
+  ],
 )

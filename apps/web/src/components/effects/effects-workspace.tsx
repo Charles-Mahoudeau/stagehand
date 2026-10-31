@@ -44,8 +44,8 @@ export function groupChoices(fixtures: Fixture[]): GroupChoice[] {
 type Props = {
   room: Room
   fixtures: Fixture[]
-  selectedId: number | undefined
-  onSelect: (id: number | undefined) => void
+  selectedId: string | undefined
+  onSelect: (id: string | undefined) => void
 }
 
 export function EffectsWorkspace({ room, fixtures, selectedId, onSelect }: Props) {
@@ -189,8 +189,8 @@ function Library({
   create,
 }: {
   effects: Effect[]
-  selectedId: number | undefined
-  onSelect: (id: number) => void
+  selectedId: string | undefined
+  onSelect: (id: string) => void
   create: (generator: Generator) => void
 }) {
   const [generator, setGenerator] = useState<Generator>('fire')

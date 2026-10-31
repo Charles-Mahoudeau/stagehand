@@ -1,10 +1,10 @@
 import { createRoute, z } from '@hono/zod-openapi'
-import { defaultParams, EffectSchema, Generator, ParamsSchema } from '@stagehand/shared'
+import { defaultParams, EffectSchema, Generator, ParamsSchema, uniqueSlug } from '@stagehand/shared'
 import { and, eq, ne, sql } from 'drizzle-orm'
 import { db } from '../db'
 import { effects, scenes } from '../db/schema'
 import { createRouter } from '../lib/router'
-import { errorResponse, jsonResponse as json } from '../lib/schemas'
+import { errorResponse, idParam, idSchema, jsonResponse as json } from '../lib/schemas'
 import { playback } from '../playback'
 import { broadcast } from '../ws'
 import { findRoom, RoomParams } from './rooms'
@@ -14,6 +14,9 @@ const NameSchema = z.string().trim().min(1).max(100).openapi({ example: 'Firepla
 const EffectCreateSchema = z
   .object({
     name: NameSchema,
+    id: idSchema('fireplace')
+      .optional()
+      .openapi({ description: 'Made from the name when omitted' }),
     generator: Generator,
     params: ParamsSchema.optional().openapi({
       description: 'The generator defaults when omitted',
@@ -32,11 +35,7 @@ const EffectUpdateSchema = z
   .openapi('EffectUpdate')
 
 const EffectParams = RoomParams.extend({
-  effectId: z.coerce
-    .number()
-    .int()
-    .positive()
-    .openapi({ param: { name: 'effectId', in: 'path' }, example: 1 }),
+  effectId: idParam('effectId', 'fireplace'),
 })
 
 const listEffects = createRoute({
@@ -63,7 +62,7 @@ const addEffect = createRoute({
   responses: {
     201: json('Effect added', EffectSchema),
     404: errorResponse('No such room'),
-    409: errorResponse('Name already used in this room'),
+    409: errorResponse('Name or ID already used in this room'),
   },
 })
 
@@ -119,14 +118,14 @@ const stopEffect = createRoute({
   responses: { 204: { description: 'Stopped' }, 404: errorResponse('No such effect') },
 })
 
-const find = (roomId: number, id: number) =>
+const find = (roomId: string, id: string) =>
   db
     .select()
     .from(effects)
     .where(and(eq(effects.roomId, roomId), eq(effects.id, id)))
     .get()
 
-function nameTaken(roomId: number, name: string, exceptId?: number) {
+function nameTaken(roomId: string, name: string, exceptId?: string) {
   const conditions = [eq(effects.roomId, roomId), sql`lower(${effects.name}) = lower(${name})`]
   if (exceptId !== undefined) conditions.push(ne(effects.id, exceptId))
   return !!db
@@ -138,7 +137,7 @@ function nameTaken(roomId: number, name: string, exceptId?: number) {
 
 const nameConflict = (name: string) => ({ error: `An effect named "${name}" exists in this room` })
 
-const changed = (roomId: number) => {
+const changed = (roomId: string) => {
   playback.invalidate()
   broadcast({ type: 'effects.changed', roomId })
 }
@@ -160,9 +159,13 @@ export const effectRoutes = createRouter()
     const input = c.req.valid('json')
     if (!findRoom(roomId)) return c.json({ error: 'Room not found' }, 404)
     if (nameTaken(roomId, input.name)) return c.json(nameConflict(input.name), 409)
+    if (input.id !== undefined && find(roomId, input.id)) {
+      return c.json({ error: `An effect with ID "${input.id}" exists in this room` }, 409)
+    }
     const row = db
       .insert(effects)
       .values({
+        id: input.id ?? uniqueSlug(input.name, 'effect', (s) => !!find(roomId, s)),
         roomId,
         name: input.name,
         generator: input.generator,
@@ -184,7 +187,12 @@ export const effectRoutes = createRouter()
     }
     const set = { ...input, ...(params ? { params: { ...old.params, ...params } } : {}) }
     if (Object.keys(set).length === 0) return c.json(old, 200)
-    const row = db.update(effects).set(set).where(eq(effects.id, effectId)).returning().get()
+    const row = db
+      .update(effects)
+      .set(set)
+      .where(and(eq(effects.roomId, roomId), eq(effects.id, effectId)))
+      .returning()
+      .get()
     changed(roomId)
     return c.json(row, 200)
   })
@@ -196,10 +204,12 @@ export const effectRoutes = createRouter()
         if (!s.effects.some((e) => e.effectId === effectId)) continue
         tx.update(scenes)
           .set({ effects: s.effects.filter((e) => e.effectId !== effectId) })
-          .where(eq(scenes.id, s.id))
+          .where(and(eq(scenes.roomId, roomId), eq(scenes.id, s.id)))
           .run()
       }
-      tx.delete(effects).where(eq(effects.id, effectId)).run()
+      tx.delete(effects)
+        .where(and(eq(effects.roomId, roomId), eq(effects.id, effectId)))
+        .run()
     })
     playback.stopEffect(effectId)
     changed(roomId)

@@ -1,20 +1,16 @@
 import { createRoute, z } from '@hono/zod-openapi'
-import { coarseFine, MAX_16 } from '@stagehand/shared'
-import { and, eq, inArray, ne, sql } from 'drizzle-orm'
+import { coarseFine, MAX_16, Slug, uniqueSlug } from '@stagehand/shared'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { db } from '../db'
 import { fixtures, targetPositions, targets } from '../db/schema'
 import { dmxOutput } from '../dmx'
 import { identify } from '../identify'
 import { createRouter } from '../lib/router'
-import { errorResponse, jsonResponse as json } from '../lib/schemas'
+import { errorResponse, idParam, idSchema, jsonResponse as json } from '../lib/schemas'
 import { broadcast } from '../ws'
 import { findRoom, RoomParams } from './rooms'
 
-const SlugSchema = z
-  .string()
-  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Lower-case letters, digits and single dashes')
-  .max(40)
-  .openapi({ example: 'dj-booth' })
+const IdSchema = idSchema('dj-booth')
 
 const Value16 = z
   .number()
@@ -24,15 +20,14 @@ const Value16 = z
   .openapi({ description: '16-bit DMX value: coarse × 256 + fine' })
 
 const PositionSchema = z
-  .object({ fixtureId: z.number().int(), pan: Value16, tilt: Value16 })
+  .object({ fixtureId: idSchema('m1'), pan: Value16, tilt: Value16 })
   .openapi('TargetPosition')
 
 const TargetSchema = z
   .object({
-    id: z.number().int(),
-    roomId: z.number().int(),
+    id: IdSchema,
+    roomId: idSchema('wakanda'),
     name: z.string().openapi({ example: 'DJ booth' }),
-    slug: SlugSchema,
     positions: z.array(PositionSchema),
   })
   .openapi('Target')
@@ -42,46 +37,36 @@ const NameSchema = z.string().trim().min(1).max(100).openapi({ example: 'DJ boot
 const TargetCreateSchema = z
   .object({
     name: NameSchema,
-    slug: SlugSchema.optional().openapi({ description: 'Made from the name when omitted' }),
+    id: IdSchema.optional().openapi({ description: 'Made from the name when omitted' }),
   })
   .openapi('TargetCreate')
 
 const TargetUpdateSchema = z
-  .object({ name: NameSchema, slug: SlugSchema })
+  .object({ name: NameSchema, id: IdSchema })
   .partial()
   .openapi('TargetUpdate')
 
 const TargetParams = RoomParams.extend({
-  targetId: z.coerce
-    .number()
-    .int()
-    .positive()
-    .openapi({ param: { name: 'targetId', in: 'path' }, example: 1 }),
+  targetId: idParam('targetId', 'dj-booth'),
 })
 
 const PositionParams = TargetParams.extend({
-  fixtureId: z.coerce
-    .number()
-    .int()
-    .positive()
-    .openapi({ param: { name: 'fixtureId', in: 'path' }, example: 1 }),
+  fixtureId: idParam('fixtureId', 'm1'),
 })
 
 const AimSchema = z
   .object({
-    fixtureIds: z.array(z.number().int()).min(1).openapi({ description: 'Moving heads to aim' }),
-    targetId: z.number().int(),
+    fixtureIds: z.array(Slug).min(1).openapi({ description: 'Moving heads to aim' }),
+    targetId: Slug,
   })
   .openapi('Aim')
 
 const AimResultSchema = z
   .object({
-    aimed: z.array(
-      z.object({ fixtureId: z.number().int(), pan: z.number().int(), tilt: z.number().int() }),
-    ),
+    aimed: z.array(z.object({ fixtureId: Slug, pan: z.number().int(), tilt: z.number().int() })),
     skipped: z.array(
       z.object({
-        fixtureId: z.number().int(),
+        fixtureId: Slug,
         reason: z.string().openapi({ example: 'Not set for this target' }),
       }),
     ),
@@ -200,14 +185,14 @@ function toTargets(rows: TargetRow[]) {
   return rows.map((row) => ({
     ...row,
     positions: positions
-      .filter((p) => p.targetId === row.id)
+      .filter((p) => p.roomId === row.roomId && p.targetId === row.id)
       .map(({ fixtureId, pan, tilt }) => ({ fixtureId, pan, tilt })),
   }))
 }
 
 const toTarget = (row: TargetRow) => toTargets([row])[0] as ReturnType<typeof toTargets>[number]
 
-function findTarget(roomId: number, id: number) {
+function findTarget(roomId: string, id: string) {
   return db
     .select()
     .from(targets)
@@ -215,7 +200,7 @@ function findTarget(roomId: number, id: number) {
     .get()
 }
 
-function findHead(roomId: number, id: number) {
+function findHead(roomId: string, id: string) {
   return db
     .select({ id: fixtures.id })
     .from(fixtures)
@@ -223,35 +208,10 @@ function findHead(roomId: number, id: number) {
     .get()
 }
 
-function slugTaken(roomId: number, slug: string, exceptId?: number) {
-  const conditions = [eq(targets.roomId, roomId), eq(targets.slug, slug)]
-  if (exceptId !== undefined) conditions.push(ne(targets.id, exceptId))
-  return !!db
-    .select({ id: targets.id })
-    .from(targets)
-    .where(and(...conditions))
-    .get()
-}
-
-// "DJ booth" → "dj-booth", numbered if the room already has one.
-function slugFor(roomId: number, name: string) {
-  const base =
-    name
-      .normalize('NFKD')
-      .replace(/[̀-ͯ]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 36) || 'target'
-  let slug = base
-  for (let n = 2; slugTaken(roomId, slug); n++) slug = `${base}-${n}`
-  return slug
-}
-
-const slugConflict = (slug: string) => ({ error: `A target with ID "${slug}" exists in this room` })
+const idConflict = (id: string) => ({ error: `A target with ID "${id}" exists in this room` })
 
 // Writes each head's stored pan/tilt for the target straight to the output.
-function aimHeads(roomId: number, fixtureIds: number[], targetId: number) {
+function aimHeads(roomId: string, fixtureIds: string[], targetId: string) {
   const heads = db
     .select()
     .from(fixtures)
@@ -260,10 +220,10 @@ function aimHeads(roomId: number, fixtureIds: number[], targetId: number) {
   const positions = db
     .select()
     .from(targetPositions)
-    .where(eq(targetPositions.targetId, targetId))
+    .where(and(eq(targetPositions.roomId, roomId), eq(targetPositions.targetId, targetId)))
     .all()
-  const aimed: { fixtureId: number; pan: number; tilt: number }[] = []
-  const skipped: { fixtureId: number; reason: string }[] = []
+  const aimed: { fixtureId: string; pan: number; tilt: number }[] = []
+  const skipped: { fixtureId: string; reason: string }[] = []
 
   for (const id of fixtureIds) {
     const head = heads.find((f) => f.id === id)
@@ -297,12 +257,16 @@ export const targetRoutes = createRouter()
   })
   .openapi(addTarget, (c) => {
     const { roomId } = c.req.valid('param')
-    const { slug, ...input } = c.req.valid('json')
+    const { id, ...input } = c.req.valid('json')
     if (!findRoom(roomId)) return c.json({ error: 'Room not found' }, 404)
-    if (slug !== undefined && slugTaken(roomId, slug)) return c.json(slugConflict(slug), 409)
+    if (id !== undefined && findTarget(roomId, id)) return c.json(idConflict(id), 409)
     const row = db
       .insert(targets)
-      .values({ ...input, roomId, slug: slug ?? slugFor(roomId, input.name) })
+      .values({
+        ...input,
+        roomId,
+        id: id ?? uniqueSlug(input.name, 'target', (s) => !!findTarget(roomId, s)),
+      })
       .returning()
       .get()
     broadcast({ type: 'targets.changed', roomId })
@@ -313,19 +277,27 @@ export const targetRoutes = createRouter()
     const input = c.req.valid('json')
     const old = findTarget(roomId, targetId)
     if (!old) return c.json({ error: 'Target not found' }, 404)
-    if (input.slug !== undefined && slugTaken(roomId, input.slug, targetId)) {
-      return c.json(slugConflict(input.slug), 409)
+    if (input.id !== undefined && input.id !== targetId && findTarget(roomId, input.id)) {
+      return c.json(idConflict(input.id), 409)
     }
     // Drizzle rejects an empty SET, so an empty body is a no-op.
     if (Object.keys(input).length === 0) return c.json(toTarget(old), 200)
-    const row = db.update(targets).set(input).where(eq(targets.id, targetId)).returning().get()
+    // Positions follow an ID change through the foreign key's ON UPDATE CASCADE.
+    const row = db
+      .update(targets)
+      .set(input)
+      .where(and(eq(targets.roomId, roomId), eq(targets.id, targetId)))
+      .returning()
+      .get()
     broadcast({ type: 'targets.changed', roomId })
     return c.json(toTarget(row), 200)
   })
   .openapi(removeTarget, (c) => {
     const { roomId, targetId } = c.req.valid('param')
     if (!findTarget(roomId, targetId)) return c.json({ error: 'Target not found' }, 404)
-    db.delete(targets).where(eq(targets.id, targetId)).run()
+    db.delete(targets)
+      .where(and(eq(targets.roomId, roomId), eq(targets.id, targetId)))
+      .run()
     broadcast({ type: 'targets.changed', roomId })
     return c.body(null, 204)
   })
@@ -335,9 +307,9 @@ export const targetRoutes = createRouter()
     const target = findTarget(roomId, targetId)
     if (!target || !findHead(roomId, fixtureId)) return c.json({ error: 'Target not found' }, 404)
     db.insert(targetPositions)
-      .values({ targetId, fixtureId, pan, tilt })
+      .values({ roomId, targetId, fixtureId, pan, tilt })
       .onConflictDoUpdate({
-        target: [targetPositions.targetId, targetPositions.fixtureId],
+        target: [targetPositions.roomId, targetPositions.targetId, targetPositions.fixtureId],
         set: { pan, tilt },
       })
       .run()
@@ -349,7 +321,13 @@ export const targetRoutes = createRouter()
     const target = findTarget(roomId, targetId)
     if (!target || !findHead(roomId, fixtureId)) return c.json({ error: 'Target not found' }, 404)
     db.delete(targetPositions)
-      .where(and(eq(targetPositions.targetId, targetId), eq(targetPositions.fixtureId, fixtureId)))
+      .where(
+        and(
+          eq(targetPositions.roomId, roomId),
+          eq(targetPositions.targetId, targetId),
+          eq(targetPositions.fixtureId, fixtureId),
+        ),
+      )
       .run()
     broadcast({ type: 'targets.changed', roomId })
     return c.json(toTarget(target), 200)

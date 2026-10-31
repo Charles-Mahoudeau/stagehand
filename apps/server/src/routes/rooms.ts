@@ -1,11 +1,12 @@
 import { createRoute, z } from '@hono/zod-openapi'
+import { uniqueSlug } from '@stagehand/shared'
 import { and, eq, ne, sql } from 'drizzle-orm'
 import { db } from '../db'
 import { rooms } from '../db/schema'
 import { dmxOutput } from '../dmx'
 import { identify } from '../identify'
 import { createRouter } from '../lib/router'
-import { errorResponse, jsonResponse as json } from '../lib/schemas'
+import { errorResponse, idParam, idSchema, jsonResponse as json } from '../lib/schemas'
 import { playback } from '../playback'
 import { broadcast } from '../ws'
 
@@ -14,7 +15,7 @@ const SizeSchema = z.number().positive().max(1000).nullable()
 
 const RoomSchema = z
   .object({
-    id: z.number().int().openapi({ example: 1 }),
+    id: idSchema('wakanda'),
     name: z.string().openapi({ example: 'Wakanda' }),
     active: z.boolean().openapi({ description: 'Whether this is the room the server is driving' }),
     width: SizeSchema.openapi({ description: 'Floor width in meters; null = not measured' }),
@@ -24,7 +25,12 @@ const RoomSchema = z
 
 const NameSchema = z.string().trim().min(1).max(100).openapi({ example: 'Wakanda' })
 
-const RoomInputSchema = z.object({ name: NameSchema }).openapi('RoomInput')
+const RoomInputSchema = z
+  .object({
+    name: NameSchema,
+    id: idSchema('wakanda').optional().openapi({ description: 'Made from the name when omitted' }),
+  })
+  .openapi('RoomInput')
 
 const RoomUpdateSchema = z
   .object({ name: NameSchema, width: SizeSchema, depth: SizeSchema })
@@ -32,11 +38,7 @@ const RoomUpdateSchema = z
   .openapi('RoomUpdate')
 
 export const RoomParams = z.object({
-  roomId: z.coerce
-    .number()
-    .int()
-    .positive()
-    .openapi({ param: { name: 'roomId', in: 'path' }, example: 1 }),
+  roomId: idParam('roomId', 'wakanda'),
 })
 
 const listRooms = createRoute({
@@ -58,7 +60,7 @@ const createRoom = createRoute({
   },
   responses: {
     201: json('Room created', RoomSchema),
-    409: errorResponse('Name already used'),
+    409: errorResponse('Name or ID already used'),
   },
 })
 
@@ -110,12 +112,12 @@ const activateRoom = createRoute({
   responses: { 200: json('Room activated', RoomSchema), 404: errorResponse('No such room') },
 })
 
-export function findRoom(id: number) {
+export function findRoom(id: string) {
   return db.select().from(rooms).where(eq(rooms.id, id)).get()
 }
 
 // Room names are unique, ignoring case.
-function nameTaken(name: string, exceptId?: number) {
+function nameTaken(name: string, exceptId?: string) {
   const sameName = sql`lower(${rooms.name}) = lower(${name})`
   return !!db
     .select({ id: rooms.id })
@@ -127,10 +129,21 @@ function nameTaken(name: string, exceptId?: number) {
 export const roomRoutes = createRouter()
   .openapi(listRooms, (c) => c.json(db.select().from(rooms).orderBy(rooms.name).all(), 200))
   .openapi(createRoom, (c) => {
-    const { name } = c.req.valid('json')
+    const { name, id } = c.req.valid('json')
     if (nameTaken(name)) return c.json({ error: `A room named "${name}" exists` }, 409)
+    if (id !== undefined && findRoom(id)) {
+      return c.json({ error: `A room with ID "${id}" exists` }, 409)
+    }
     const hasActive = !!db.select().from(rooms).where(eq(rooms.active, true)).get()
-    const room = db.insert(rooms).values({ name, active: !hasActive }).returning().get()
+    const room = db
+      .insert(rooms)
+      .values({
+        id: id ?? uniqueSlug(name, 'room', (s) => !!findRoom(s)),
+        name,
+        active: !hasActive,
+      })
+      .returning()
+      .get()
     broadcast({ type: 'rooms.changed' })
     return c.json(room, 201)
   })

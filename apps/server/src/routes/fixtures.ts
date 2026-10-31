@@ -1,12 +1,12 @@
 import { createRoute, z } from '@hono/zod-openapi'
-import { channelCount, FIXTURE_PROFILES, FixtureType } from '@stagehand/shared'
+import { channelCount, FIXTURE_PROFILES, FixtureType, uniqueSlug } from '@stagehand/shared'
 import { and, eq, ne, sql } from 'drizzle-orm'
 import { db } from '../db'
 import { fixtures } from '../db/schema'
 import { DMX_CHANNELS, dmxOutput } from '../dmx'
 import { identify } from '../identify'
 import { createRouter } from '../lib/router'
-import { errorResponse, jsonResponse as json } from '../lib/schemas'
+import { errorResponse, idParam, idSchema, jsonResponse as json } from '../lib/schemas'
 import { broadcast } from '../ws'
 import { findRoom, RoomParams } from './rooms'
 
@@ -35,8 +35,8 @@ const HeightSchema = z
 
 const FixtureSchema = z
   .object({
-    id: z.number().int(),
-    roomId: z.number().int(),
+    id: idSchema('l1'),
+    roomId: idSchema('wakanda'),
     name: z.string().openapi({ example: 'L1' }),
     type: TypeSchema,
     address: AddressSchema,
@@ -51,6 +51,7 @@ const NameSchema = z.string().trim().min(1).max(100).openapi({ example: 'L1' })
 const FixtureCreateSchema = z
   .object({
     name: NameSchema,
+    id: idSchema('l1').optional().openapi({ description: 'Made from the name when omitted' }),
     type: TypeSchema,
     address: AddressSchema,
     position: PositionSchema.nullable().default(null),
@@ -74,11 +75,7 @@ const FixtureUpdateSchema = z
   .openapi('FixtureUpdate')
 
 export const FixtureParams = RoomParams.extend({
-  fixtureId: z.coerce
-    .number()
-    .int()
-    .positive()
-    .openapi({ param: { name: 'fixtureId', in: 'path' }, example: 1 }),
+  fixtureId: idParam('fixtureId', 'l1'),
 })
 
 const FixtureTypeSchema = z
@@ -122,7 +119,7 @@ const addFixture = createRoute({
   responses: {
     201: json('Fixture added', FixtureSchema),
     404: errorResponse('No such room'),
-    409: errorResponse('Name already used in this room'),
+    409: errorResponse('Name or ID already used in this room'),
   },
 })
 
@@ -202,7 +199,7 @@ function toFixture({ x, y, ...row }: FixtureRow) {
   }
 }
 
-export function findFixture(roomId: number, id: number) {
+export function findFixture(roomId: string, id: string) {
   return db
     .select()
     .from(fixtures)
@@ -211,7 +208,7 @@ export function findFixture(roomId: number, id: number) {
 }
 
 // Fixture names are unique within a room, ignoring case.
-function nameTaken(roomId: number, name: string, exceptId?: number) {
+function nameTaken(roomId: string, name: string, exceptId?: string) {
   const conditions = [eq(fixtures.roomId, roomId), sql`lower(${fixtures.name}) = lower(${name})`]
   if (exceptId !== undefined) conditions.push(ne(fixtures.id, exceptId))
   return !!db
@@ -224,7 +221,7 @@ function nameTaken(roomId: number, name: string, exceptId?: number) {
 // After a fixture leaves channels in the active room (removed, re-addressed or
 // re-typed), zero those no remaining fixture uses, so nothing is left lit
 // with no fixture to turn it off.
-function releaseChannels(roomId: number, old: Pick<FixtureRow, 'type' | 'address'>) {
+function releaseChannels(roomId: string, old: Pick<FixtureRow, 'type' | 'address'>) {
   if (!findRoom(roomId)?.active) return
   const used = new Set<number>()
   for (const f of db.select().from(fixtures).where(eq(fixtures.roomId, roomId)).all()) {
@@ -252,12 +249,21 @@ export const fixtureRoutes = createRouter()
   })
   .openapi(addFixture, (c) => {
     const { roomId } = c.req.valid('param')
-    const { position, ...input } = c.req.valid('json')
+    const { position, id, ...input } = c.req.valid('json')
     if (!findRoom(roomId)) return c.json({ error: 'Room not found' }, 404)
     if (nameTaken(roomId, input.name)) return c.json(nameConflict(input.name), 409)
+    if (id !== undefined && findFixture(roomId, id)) {
+      return c.json({ error: `A fixture with ID "${id}" exists in this room` }, 409)
+    }
     const row = db
       .insert(fixtures)
-      .values({ ...input, roomId, x: position?.x ?? null, y: position?.y ?? null })
+      .values({
+        ...input,
+        id: id ?? uniqueSlug(input.name, 'fixture', (s) => !!findFixture(roomId, s)),
+        roomId,
+        x: position?.x ?? null,
+        y: position?.y ?? null,
+      })
       .returning()
       .get()
     broadcast({ type: 'fixtures.changed', roomId })
@@ -287,7 +293,12 @@ export const fixtureRoutes = createRouter()
     // Drizzle rejects an empty SET, so an empty body is a no-op.
     if (Object.keys(changes).length === 0) return c.json(toFixture(old), 200)
     identify.stopFor(fixtureId)
-    const row = db.update(fixtures).set(changes).where(eq(fixtures.id, fixtureId)).returning().get()
+    const row = db
+      .update(fixtures)
+      .set(changes)
+      .where(and(eq(fixtures.roomId, roomId), eq(fixtures.id, fixtureId)))
+      .returning()
+      .get()
     if (type !== old.type || address !== old.address) releaseChannels(roomId, old)
     broadcast({ type: 'fixtures.changed', roomId })
     return c.json(toFixture(row), 200)
@@ -297,7 +308,9 @@ export const fixtureRoutes = createRouter()
     const old = findFixture(roomId, fixtureId)
     if (!old) return c.json({ error: 'Fixture not found' }, 404)
     identify.stopFor(fixtureId)
-    db.delete(fixtures).where(eq(fixtures.id, fixtureId)).run()
+    db.delete(fixtures)
+      .where(and(eq(fixtures.roomId, roomId), eq(fixtures.id, fixtureId)))
+      .run()
     releaseChannels(roomId, old)
     broadcast({ type: 'fixtures.changed', roomId })
     return c.body(null, 204)

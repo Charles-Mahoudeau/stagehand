@@ -1,10 +1,10 @@
 import { createRoute, z } from '@hono/zod-openapi'
-import { CUE_TRIGGERS, CueSchema, PlaybackState } from '@stagehand/shared'
+import { CUE_TRIGGERS, CueSchema, PlaybackState, Slug, uniqueSlug } from '@stagehand/shared'
 import { and, asc, eq, sql } from 'drizzle-orm'
 import { db } from '../db'
 import { cues, scenes } from '../db/schema'
 import { createRouter } from '../lib/router'
-import { errorResponse, jsonResponse as json } from '../lib/schemas'
+import { errorResponse, idParam, idSchema, jsonResponse as json } from '../lib/schemas'
 import { playback } from '../playback'
 import { broadcast } from '../ws'
 import { findRoom, RoomParams } from './rooms'
@@ -13,7 +13,10 @@ const NameSchema = z.string().trim().min(1).max(100).openapi({ example: 'Night f
 
 const CueCreateSchema = z
   .object({
-    sceneId: z.number().int(),
+    sceneId: Slug,
+    id: idSchema('night-falls')
+      .optional()
+      .openapi({ description: 'Made from the name when omitted' }),
     name: NameSchema.optional().openapi({ description: 'The scene’s name when omitted' }),
     fade: z.number().min(0).max(120).nullable().optional(),
     trigger: z.enum(CUE_TRIGGERS).optional(),
@@ -23,7 +26,7 @@ const CueCreateSchema = z
 
 const CueUpdateSchema = z
   .object({
-    sceneId: z.number().int(),
+    sceneId: Slug,
     name: NameSchema,
     fade: z.number().min(0).max(120).nullable(),
     trigger: z.enum(CUE_TRIGGERS),
@@ -33,15 +36,11 @@ const CueUpdateSchema = z
   .openapi('CueUpdate')
 
 const CueOrderSchema = z
-  .object({ ids: z.array(z.number().int()).openapi({ description: 'Every cue id, in order' }) })
+  .object({ ids: z.array(Slug).openapi({ description: 'Every cue id, in order' }) })
   .openapi('CueOrder')
 
 const CueParams = RoomParams.extend({
-  cueId: z.coerce
-    .number()
-    .int()
-    .positive()
-    .openapi({ param: { name: 'cueId', in: 'path' }, example: 1 }),
+  cueId: idParam('cueId', 'night-falls'),
 })
 
 const listCues = createRoute({
@@ -65,6 +64,7 @@ const addCue = createRoute({
   responses: {
     201: json('Cue added', CueSchema),
     404: errorResponse('No such room or scene'),
+    409: errorResponse('ID already used in this room'),
   },
 })
 
@@ -145,24 +145,24 @@ const goCue = createRoute({
   },
 })
 
-const list = (roomId: number) =>
+const list = (roomId: string) =>
   db.select().from(cues).where(eq(cues.roomId, roomId)).orderBy(asc(cues.position)).all()
 
-const find = (roomId: number, id: number) =>
+const find = (roomId: string, id: string) =>
   db
     .select()
     .from(cues)
     .where(and(eq(cues.roomId, roomId), eq(cues.id, id)))
     .get()
 
-const findScene = (roomId: number, id: number) =>
+const findScene = (roomId: string, id: string) =>
   db
     .select()
     .from(scenes)
     .where(and(eq(scenes.roomId, roomId), eq(scenes.id, id)))
     .get()
 
-const changed = (roomId: number) => {
+const changed = (roomId: string) => {
   playback.invalidate()
   broadcast({ type: 'cues.changed', roomId })
 }
@@ -188,7 +188,10 @@ export const cueRoutes = createRouter()
     }
     db.transaction((tx) => {
       ids.forEach((id, position) => {
-        tx.update(cues).set({ position }).where(eq(cues.id, id)).run()
+        tx.update(cues)
+          .set({ position })
+          .where(and(eq(cues.roomId, roomId), eq(cues.id, id)))
+          .run()
       })
     })
     changed(roomId)
@@ -200,6 +203,10 @@ export const cueRoutes = createRouter()
     if (!findRoom(roomId)) return c.json({ error: 'Room not found' }, 404)
     const scene = findScene(roomId, input.sceneId)
     if (!scene) return c.json({ error: 'Scene not found' }, 404)
+    if (input.id !== undefined && find(roomId, input.id)) {
+      return c.json({ error: `A cue with ID "${input.id}" exists in this room` }, 409)
+    }
+    const name = input.name ?? scene.name
     const last = db
       .select({ n: sql<number>`coalesce(max(${cues.position}), -1)` })
       .from(cues)
@@ -208,9 +215,10 @@ export const cueRoutes = createRouter()
     const row = db
       .insert(cues)
       .values({
+        id: input.id ?? uniqueSlug(name, 'cue', (s) => !!find(roomId, s)),
         roomId,
         position: (last?.n ?? -1) + 1,
-        name: input.name ?? scene.name,
+        name,
         sceneId: scene.id,
         fade: input.fade ?? null,
         trigger: input.trigger ?? 'go',
@@ -230,14 +238,21 @@ export const cueRoutes = createRouter()
       return c.json({ error: 'Scene not found' }, 404)
     }
     if (Object.keys(input).length === 0) return c.json(old, 200)
-    const row = db.update(cues).set(input).where(eq(cues.id, cueId)).returning().get()
+    const row = db
+      .update(cues)
+      .set(input)
+      .where(and(eq(cues.roomId, roomId), eq(cues.id, cueId)))
+      .returning()
+      .get()
     changed(roomId)
     return c.json(row, 200)
   })
   .openapi(removeCue, (c) => {
     const { roomId, cueId } = c.req.valid('param')
     if (!find(roomId, cueId)) return c.json({ error: 'Cue not found' }, 404)
-    db.delete(cues).where(eq(cues.id, cueId)).run()
+    db.delete(cues)
+      .where(and(eq(cues.roomId, roomId), eq(cues.id, cueId)))
+      .run()
     changed(roomId)
     return c.body(null, 204)
   })

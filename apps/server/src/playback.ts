@@ -25,7 +25,7 @@ import {
 } from '@stagehand/shared'
 import { eq } from 'drizzle-orm'
 import { db } from './db'
-import { cues, effects, fixtures, rooms, scenes, targetPositions, targets } from './db/schema'
+import { cues, effects, fixtures, rooms, scenes, targetPositions } from './db/schema'
 import { dmxOutput } from './dmx'
 import { broadcast } from './ws'
 
@@ -39,13 +39,12 @@ type FixtureRow = typeof fixtures.$inferSelect
 
 type Cache = {
   loadedAt: number
-  roomId: number
+  roomId: string
   fixtures: FixtureRow[]
   units: Unit[]
-  effects: Map<number, EffectDef>
-  scenes: Map<number, SceneDef>
+  effects: Map<string, EffectDef>
+  scenes: Map<string, SceneDef>
   cues: CueDef[]
-  targetIds: Map<string, number>
   // `${targetId}:${fixtureId}` to the head's pan/tilt for that target.
   positions: Map<string, { pan: number; tilt: number }>
 }
@@ -53,7 +52,7 @@ type Cache = {
 // A running copy of an effect: in a scene, or fired from a pad.
 type Instance = {
   id: number
-  effectId: number
+  effectId: string
   start: number
   opacity: number
   strikes: Strike[]
@@ -62,7 +61,7 @@ type Instance = {
   releaseAt: number | null
 }
 
-type SceneRun = { sceneId: number; start: number; instances: Instance[] }
+type SceneRun = { sceneId: string; start: number; instances: Instance[] }
 
 const now = () => performance.now() / 1000
 const clamp = (x: number, a = 0, b = 1) => Math.min(b, Math.max(a, x))
@@ -83,7 +82,7 @@ class Playback {
   private from: SceneRun | Frame | null = null
   private fadeStart = 0
   private fadeDur = 0
-  private cueId: number | null = null
+  private cueId: string | null = null
   private cueStart = 0
   private overlays: Instance[] = []
   private lastFrame: Frame | null = null
@@ -131,7 +130,7 @@ class Playback {
     return prev
   }
 
-  goCue(cueId: number) {
+  goCue(cueId: string) {
     const cue = this.load()?.cues.find((q) => q.id === cueId)
     if (!cue) return null
     this.callCue(cue)
@@ -139,7 +138,7 @@ class Playback {
   }
 
   // Calls a scene on its own, outside the cue list.
-  goScene(sceneId: number) {
+  goScene(sceneId: string) {
     const scene = this.load()?.scenes.get(sceneId)
     if (!scene) return null
     this.callScene(scene, scene.fade)
@@ -150,7 +149,7 @@ class Playback {
 
   // Starts an effect on top of the scene. A one-shot like lightning can be fired again
   // while it plays; anything else is started once and left to run until stopped.
-  fire(effectId: number) {
+  fire(effectId: string) {
     const c = this.load()
     const effect = c?.effects.get(effectId)
     if (!c || !effect) return null
@@ -176,7 +175,7 @@ class Playback {
     return effect
   }
 
-  stopEffect(effectId: number) {
+  stopEffect(effectId: string) {
     const t = now()
     for (const o of this.overlays) {
       if (o.effectId === effectId && o.releaseAt === null) o.releaseAt = t
@@ -261,9 +260,12 @@ class Playback {
       return null
     }
     const fx = db.select().from(fixtures).where(eq(fixtures.roomId, room.id)).all()
-    const tg = db.select().from(targets).where(eq(targets.roomId, room.id)).all()
     const positions = new Map<string, { pan: number; tilt: number }>()
-    for (const tp of db.select().from(targetPositions).all()) {
+    for (const tp of db
+      .select()
+      .from(targetPositions)
+      .where(eq(targetPositions.roomId, room.id))
+      .all()) {
       positions.set(`${tp.targetId}:${tp.fixtureId}`, { pan: tp.pan, tilt: tp.tilt })
     }
     this.cache = {
@@ -288,7 +290,6 @@ class Playback {
           .map((s) => [s.id, s]),
       ),
       cues: db.select().from(cues).where(eq(cues.roomId, room.id)).orderBy(cues.position).all(),
-      targetIds: new Map(tg.map((x) => [x.slug, x.id])),
       positions,
     }
     this.dirty = false
@@ -446,8 +447,7 @@ function prismByte(speed: number) {
 
 // A head's pan/tilt for an aim: the target's stored position plus the offset in degrees.
 function aimed(c: Cache, f: FixtureRow, aim: Aim) {
-  const targetId = c.targetIds.get(aim.target)
-  const pos = targetId === undefined ? undefined : c.positions.get(`${targetId}:${f.id}`)
+  const pos = c.positions.get(`${aim.target}:${f.id}`)
   if (!pos) return null
   const move = (v: number, deg: number, range: number) =>
     Math.round(clamp(v + (deg / range) * MAX_16, 0, MAX_16))

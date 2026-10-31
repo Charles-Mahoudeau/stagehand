@@ -19,11 +19,11 @@ export const Route = createFileRoute('/_authed/configure')({
   validateSearch: z.object({
     view: z.enum(['plan', 'targets']).optional().catch(undefined),
     dock: z.enum(['universe', 'sheet', 'problems']).optional().catch(undefined),
-    room: z.number().int().optional(),
-    fixture: z.number().int().optional(),
+    room: z.string().optional().catch(undefined),
+    fixture: z.string().optional().catch(undefined),
     // Targets view: what is picked.
-    target: z.number().int().optional(),
-    head: z.number().int().optional(),
+    target: z.string().optional().catch(undefined),
+    head: z.string().optional().catch(undefined),
   }),
   component: ConfigurePage,
 })
@@ -36,12 +36,12 @@ function ConfigurePage() {
     rooms.data?.find((r) => r.id === search.room) ??
     rooms.data?.find((r) => r.active) ??
     rooms.data?.[0]
-  const fixtures = useQuery({ ...fixturesQuery(room?.id ?? 0), enabled: !!room })
+  const fixtures = useQuery({ ...fixturesQuery(room?.id ?? ''), enabled: !!room })
   const { activate } = useRoomMutations()
   const view = search.view ?? 'plan'
   const dock: Dock = search.dock ?? 'universe'
 
-  const select = (id: number | null) =>
+  const select = (id: string | null) =>
     navigate({ search: (s) => ({ ...s, fixture: id ?? undefined }), replace: true })
   useStopIdentifyOnLeave(room?.id, search.fixture)
 
@@ -152,7 +152,7 @@ function Workspace({
 
 // The identify rainbow follows the selection: picking another fixture, or
 // leaving Configure, stops it.
-function useStopIdentifyOnLeave(roomId: number | undefined, selectedId: number | undefined) {
+function useStopIdentifyOnLeave(roomId: string | undefined, selectedId: string | undefined) {
   const { identifying } = useLive()
   const current = useRef({ roomId, identifying })
   current.current = { roomId, identifying }

@@ -10,7 +10,7 @@ type Live = {
   // Null until the server's first `dmx.state` arrives.
   dmx: DmxState | null
   // The fixture running the identify rainbow, if any.
-  identifying: number | null
+  identifying: string | null
   // What the cue list is playing; null until the server says.
   playback: PlaybackState | null
   // Sets consecutive channels from `start` (1-based) over the socket.
@@ -25,7 +25,7 @@ const LiveContext = createContext<Live | null>(null)
 export function LiveProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
   const [dmx, setDmx] = useState<DmxState | null>(null)
-  const [identifying, setIdentifying] = useState<number | null>(null)
+  const [identifying, setIdentifying] = useState<string | null>(null)
   const [playback, setPlayback] = useState<PlaybackState | null>(null)
 
   const socket = useSocket((msg) => {

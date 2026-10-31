@@ -88,9 +88,9 @@ function AimBoard({ room }: { room: Room }) {
   const { dmx, setChannels } = useLive()
   const fixtures = useQuery(fixturesQuery(room.id))
   const targets = useQuery(targetsQuery(room.id))
-  const [picked, setPicked] = useState<number[] | null>(null)
+  const [picked, setPicked] = useState<string[] | null>(null)
   // The target each head was last sent to from here.
-  const [aimed, setAimed] = useState<Record<number, Target>>({})
+  const [aimed, setAimed] = useState<Record<string, Target>>({})
 
   const heads = (fixtures.data ?? []).filter(isHead)
   // Every head follows until some are picked.
@@ -124,7 +124,7 @@ function AimBoard({ room }: { room: Room }) {
   const setLevel = (offset: number, values: number[]) => {
     for (const h of selected) setChannels(h.address + offset, values)
   }
-  const pick = (ids: number[]) => setPicked(ids)
+  const pick = (ids: string[]) => setPicked(ids)
   const skipped = send.data?.skipped ?? []
 
   return (
@@ -170,7 +170,7 @@ function AimBoard({ room }: { room: Room }) {
                   )}
                 >
                   <span className="text-base font-semibold">{t.name}</span>
-                  <span className="font-mono text-[11px] opacity-70">{t.slug}</span>
+                  <span className="font-mono text-[11px] opacity-70">{t.id}</span>
                 </button>
               )
             })}

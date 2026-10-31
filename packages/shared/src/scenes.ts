@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { Slug } from './ids'
 
 // A scene is a static look plus the library effects that run under it. Effects
 // are referenced by id, so editing one changes every scene that uses it.
@@ -18,14 +19,14 @@ export const Look = z.record(z.string().regex(/^\d+$/), LookEntry)
 export type Look = z.infer<typeof Look>
 
 export const SceneEffectRef = z.object({
-  effectId: z.number().int(),
+  effectId: Slug,
   opacity: z.number().min(0).max(1),
 })
 export type SceneEffectRef = z.infer<typeof SceneEffectRef>
 
 export const SceneSchema = z.object({
-  id: z.number().int(),
-  roomId: z.number().int(),
+  id: Slug,
+  roomId: Slug,
   name: z.string(),
   // A short label shown on the card, like "Night" or "Day".
   tag: z.string(),
@@ -39,11 +40,11 @@ export type SceneDef = z.infer<typeof SceneSchema>
 export const CUE_TRIGGERS = ['go', 'follow'] as const
 
 export const CueSchema = z.object({
-  id: z.number().int(),
-  roomId: z.number().int(),
+  id: Slug,
+  roomId: Slug,
   position: z.number().int(),
   name: z.string(),
-  sceneId: z.number().int(),
+  sceneId: Slug,
   // Seconds to crossfade in; null uses the scene's own.
   fade: z.number().min(0).max(120).nullable(),
   // `go` waits for the operator; `follow` starts by itself after the previous cue.
@@ -53,11 +54,11 @@ export const CueSchema = z.object({
 export type CueDef = z.infer<typeof CueSchema>
 
 export const PlaybackState = z.object({
-  cueId: z.number().int().nullable(),
-  sceneId: z.number().int().nullable(),
+  cueId: Slug.nullable(),
+  sceneId: Slug.nullable(),
   // Seconds left of the current crossfade, 0 when settled.
   fading: z.number(),
   // Fired one-shots and started effects, on top of the scene.
-  overlays: z.array(z.object({ effectId: z.number().int(), startedAt: z.number() })),
+  overlays: z.array(z.object({ effectId: Slug, startedAt: z.number() })),
 })
 export type PlaybackState = z.infer<typeof PlaybackState>

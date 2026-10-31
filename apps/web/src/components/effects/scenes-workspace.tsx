@@ -33,8 +33,8 @@ import { canalOf, groupChoices } from './effects-workspace'
 type Props = {
   room: Room
   fixtures: Fixture[]
-  selectedId: number | undefined
-  onSelect: (id: number | undefined) => void
+  selectedId: string | undefined
+  onSelect: (id: string | undefined) => void
 }
 
 export function ScenesWorkspace({ room, fixtures, selectedId, onSelect }: Props) {
@@ -213,7 +213,7 @@ function Inspector({
   scene: Scene
   groups: ReturnType<typeof groupChoices>
   targets: Target[]
-  effects: { id: number; name: string }[]
+  effects: { id: string; name: string }[]
   update: (patch: Partial<Pick<Scene, 'name' | 'tag' | 'look' | 'effects' | 'fade'>>) => void
   error: Error | null
 }) {
@@ -337,7 +337,7 @@ function Inspector({
                 >
                   <option value="">Keep aim</option>
                   {targets.map((t) => (
-                    <option key={t.id} value={t.slug}>
+                    <option key={t.id} value={t.id}>
                       Aim at {t.name}
                     </option>
                   ))}
@@ -402,7 +402,7 @@ function Inspector({
             onChange={(ev) =>
               ev.target.value &&
               update({
-                effects: [...scene.effects, { effectId: Number(ev.target.value), opacity: 1 }],
+                effects: [...scene.effects, { effectId: ev.target.value, opacity: 1 }],
               })
             }
             className="h-7 w-full rounded-md bg-surface-2 px-2 text-xs outline-none disabled:opacity-40"

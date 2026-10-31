@@ -8,8 +8,8 @@ import { fixturesQuery, roomsQuery } from '@/lib/rooms'
 
 export const Route = createFileRoute('/_authed/effects')({
   validateSearch: z.object({
-    room: z.number().int().optional(),
-    effect: z.number().int().optional(),
+    room: z.string().optional().catch(undefined),
+    effect: z.string().optional().catch(undefined),
   }),
   component: EffectsPage,
 })
@@ -22,7 +22,7 @@ function EffectsPage() {
     rooms.data?.find((r) => r.id === search.room) ??
     rooms.data?.find((r) => r.active) ??
     rooms.data?.[0]
-  const fixtures = useQuery({ ...fixturesQuery(room?.id ?? 0), enabled: !!room })
+  const fixtures = useQuery({ ...fixturesQuery(room?.id ?? ''), enabled: !!room })
 
   return (
     <AppShell

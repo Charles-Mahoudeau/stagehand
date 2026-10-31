@@ -20,12 +20,12 @@ type Props = {
   live: boolean
   // The room's width over its depth; the plan is square-ish filling its box when omitted.
   aspect?: number
-  selectedId?: number
+  selectedId?: string
   // Fixtures drawn at full strength; the others are dimmed. All when omitted.
-  highlight?: Set<number>
-  onSelect?: (id: number) => void
+  highlight?: Set<string>
+  onSelect?: (id: string) => void
   // Makes fixtures draggable (and movable with the arrow keys).
-  onMove?: (id: number, position: Position) => Promise<unknown>
+  onMove?: (id: string, position: Position) => Promise<unknown>
   size?: 'lg' | 'sm'
   className?: string
   // Drawn over the fixtures, in the same box. Gets the conversion from a
@@ -74,7 +74,7 @@ export function StagePlan({
 }: Props) {
   const { dmx } = useLive()
   const area = useRef<HTMLDivElement>(null)
-  const [drag, setDrag] = useState<{ id: number; position: Position; moved: boolean } | null>(null)
+  const [drag, setDrag] = useState<{ id: string; position: Position; moved: boolean } | null>(null)
   const box = useRef<HTMLDivElement>(null)
   const [view, setView] = useState<View>(HOME)
   const pan = useRef<{ x: number; y: number; moved: boolean } | null>(null)

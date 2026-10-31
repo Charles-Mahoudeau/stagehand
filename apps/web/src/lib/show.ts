@@ -12,9 +12,9 @@ export type Effect = InferResponseType<Room['effects']['$get'], 200>[number]
 export type Scene = InferResponseType<Room['scenes']['$get'], 200>[number]
 export type Cue = InferResponseType<Room['cues']['$get'], 200>[number]
 
-const rid = (roomId: number) => ({ roomId: String(roomId) })
+const rid = (roomId: string) => ({ roomId: roomId })
 
-export const effectsQuery = (roomId: number) =>
+export const effectsQuery = (roomId: string) =>
   queryOptions({
     queryKey: ['rooms', roomId, 'effects'],
     queryFn: async () => {
@@ -24,7 +24,7 @@ export const effectsQuery = (roomId: number) =>
     },
   })
 
-export const scenesQuery = (roomId: number) =>
+export const scenesQuery = (roomId: string) =>
   queryOptions({
     queryKey: ['rooms', roomId, 'scenes'],
     queryFn: async () => {
@@ -34,7 +34,7 @@ export const scenesQuery = (roomId: number) =>
     },
   })
 
-export const cuesQuery = (roomId: number) =>
+export const cuesQuery = (roomId: string) =>
   queryOptions({
     queryKey: ['rooms', roomId, 'cues'],
     queryFn: async () => {
@@ -44,10 +44,10 @@ export const cuesQuery = (roomId: number) =>
     },
   })
 
-export function useEffectMutations(roomId: number) {
+export function useEffectMutations(roomId: string) {
   const queryClient = useQueryClient()
   const { queryKey } = effectsQuery(roomId)
-  const param = (id: number) => ({ ...rid(roomId), effectId: String(id) })
+  const param = (id: string) => ({ ...rid(roomId), effectId: id })
   const store = (effect: Effect) =>
     queryClient.setQueryData(queryKey, (list) =>
       list?.some((e) => e.id === effect.id)
@@ -73,7 +73,7 @@ export function useEffectMutations(roomId: number) {
       mutationFn: async ({
         id,
         ...json
-      }: { id: number } & Partial<{ name: string; params: ParamsInput; pad: boolean }>) => {
+      }: { id: string } & Partial<{ name: string; params: ParamsInput; pad: boolean }>) => {
         const res = await api.rooms[':roomId'].effects[':effectId'].$patch({
           param: param(id),
           json,
@@ -84,7 +84,7 @@ export function useEffectMutations(roomId: number) {
       onSuccess: store,
     }),
     remove: useMutation({
-      mutationFn: async (id: number) => {
+      mutationFn: async (id: string) => {
         const res = await api.rooms[':roomId'].effects[':effectId'].$delete({ param: param(id) })
         if (!res.ok) throw await failure(res)
       },
@@ -94,13 +94,13 @@ export function useEffectMutations(roomId: number) {
       },
     }),
     fire: useMutation({
-      mutationFn: async (id: number) => {
+      mutationFn: async (id: string) => {
         const res = await api.rooms[':roomId'].effects[':effectId'].fire.$post({ param: param(id) })
         if (!res.ok) throw await failure(res)
       },
     }),
     stop: useMutation({
-      mutationFn: async (id: number) => {
+      mutationFn: async (id: string) => {
         const res = await api.rooms[':roomId'].effects[':effectId'].stop.$post({ param: param(id) })
         if (!res.ok) throw await failure(res)
       },
@@ -108,10 +108,10 @@ export function useEffectMutations(roomId: number) {
   }
 }
 
-export function useSceneMutations(roomId: number) {
+export function useSceneMutations(roomId: string) {
   const queryClient = useQueryClient()
   const { queryKey } = scenesQuery(roomId)
-  const param = (id: number) => ({ ...rid(roomId), sceneId: String(id) })
+  const param = (id: string) => ({ ...rid(roomId), sceneId: id })
   const store = (scene: Scene) =>
     queryClient.setQueryData(queryKey, (list) =>
       list?.some((s) => s.id === scene.id)
@@ -132,7 +132,7 @@ export function useSceneMutations(roomId: number) {
       mutationFn: async ({
         id,
         ...json
-      }: { id: number } & Partial<Omit<Scene, 'id' | 'roomId'>>) => {
+      }: { id: string } & Partial<Omit<Scene, 'id' | 'roomId'>>) => {
         const res = await api.rooms[':roomId'].scenes[':sceneId'].$patch({
           param: param(id),
           json,
@@ -143,7 +143,7 @@ export function useSceneMutations(roomId: number) {
       onSuccess: store,
     }),
     remove: useMutation({
-      mutationFn: async (id: number) => {
+      mutationFn: async (id: string) => {
         const res = await api.rooms[':roomId'].scenes[':sceneId'].$delete({ param: param(id) })
         if (!res.ok) throw await failure(res)
       },
@@ -153,7 +153,7 @@ export function useSceneMutations(roomId: number) {
       },
     }),
     go: useMutation({
-      mutationFn: async (id: number) => {
+      mutationFn: async (id: string) => {
         const res = await api.rooms[':roomId'].scenes[':sceneId'].go.$post({ param: param(id) })
         if (!res.ok) throw await failure(res)
       },
@@ -161,15 +161,15 @@ export function useSceneMutations(roomId: number) {
   }
 }
 
-export function useCueMutations(roomId: number) {
+export function useCueMutations(roomId: string) {
   const queryClient = useQueryClient()
   const { queryKey } = cuesQuery(roomId)
-  const param = (id: number) => ({ ...rid(roomId), cueId: String(id) })
+  const param = (id: string) => ({ ...rid(roomId), cueId: id })
   const refresh = () => queryClient.invalidateQueries({ queryKey })
 
   return {
     create: useMutation({
-      mutationFn: async (json: { sceneId: number; name?: string }) => {
+      mutationFn: async (json: { sceneId: string; name?: string }) => {
         const res = await api.rooms[':roomId'].cues.$post({ param: rid(roomId), json })
         if (!res.ok) throw await failure(res)
         return res.json()
@@ -180,7 +180,7 @@ export function useCueMutations(roomId: number) {
       mutationFn: async ({
         id,
         ...json
-      }: { id: number } & Partial<Omit<Cue, 'id' | 'roomId' | 'position'>>) => {
+      }: { id: string } & Partial<Omit<Cue, 'id' | 'roomId' | 'position'>>) => {
         const res = await api.rooms[':roomId'].cues[':cueId'].$patch({ param: param(id), json })
         if (!res.ok) throw await failure(res)
         return res.json()
@@ -188,14 +188,14 @@ export function useCueMutations(roomId: number) {
       onSuccess: refresh,
     }),
     remove: useMutation({
-      mutationFn: async (id: number) => {
+      mutationFn: async (id: string) => {
         const res = await api.rooms[':roomId'].cues[':cueId'].$delete({ param: param(id) })
         if (!res.ok) throw await failure(res)
       },
       onSuccess: refresh,
     }),
     order: useMutation({
-      mutationFn: async (ids: number[]) => {
+      mutationFn: async (ids: string[]) => {
         const res = await api.rooms[':roomId'].cues.order.$put({
           param: rid(roomId),
           json: { ids },
@@ -206,7 +206,7 @@ export function useCueMutations(roomId: number) {
       onSuccess: (list) => queryClient.setQueryData(queryKey, list),
     }),
     go: useMutation({
-      mutationFn: async (id: number) => {
+      mutationFn: async (id: string) => {
         const res = await api.rooms[':roomId'].cues[':cueId'].go.$post({ param: param(id) })
         if (!res.ok) throw await failure(res)
       },
@@ -215,7 +215,7 @@ export function useCueMutations(roomId: number) {
 }
 
 // Transport: next, previous, release everything.
-export function usePlaybackMutations(roomId: number) {
+export function usePlaybackMutations(roomId: string) {
   const run = (action: 'go' | 'back' | 'stop') => async () => {
     const res = await api.rooms[':roomId'].playback[action].$post({ param: rid(roomId) })
     if (!res.ok) throw await failure(res)

@@ -124,7 +124,7 @@ export function ParamsForm({ effect, groups, targets, onChange }: Props) {
                     >
                       <option value="">Stay where they are</option>
                       {targets.map((t) => (
-                        <option key={t.id} value={t.slug}>
+                        <option key={t.id} value={t.id}>
                           {t.name}
                         </option>
                       ))}

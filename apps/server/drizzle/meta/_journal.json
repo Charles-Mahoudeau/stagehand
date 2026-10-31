@@ -36,6 +36,13 @@
       "when": 1793379448953,
       "tag": "0004_bouncy_king_bedlam",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793464374988,
+      "tag": "0005_text_ids",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { Slug } from './ids'
 import { PlaybackState } from './scenes'
 
 // Messages sent over the /ws socket. Both sides validate with these schemas.
@@ -8,8 +9,8 @@ export const ServerMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('pong'), t: z.number() }),
   // Something was created, renamed, deleted or activated; clients refetch.
   z.object({ type: z.literal('rooms.changed') }),
-  z.object({ type: z.literal('fixtures.changed'), roomId: z.number() }),
-  z.object({ type: z.literal('targets.changed'), roomId: z.number() }),
+  z.object({ type: z.literal('fixtures.changed'), roomId: Slug }),
+  z.object({ type: z.literal('targets.changed'), roomId: Slug }),
   // Output status and channels 1–512 (index 0 is channel 1). Sent on connect,
   // whenever channels change (at most 10 times a second) and once a second.
   z.object({
@@ -20,11 +21,11 @@ export const ServerMessage = z.discriminatedUnion('type', [
     channels: z.array(z.number()),
   }),
   // The fixture whose address is running the identify rainbow, if any.
-  z.object({ type: z.literal('identify.changed'), fixtureId: z.number().nullable() }),
+  z.object({ type: z.literal('identify.changed'), fixtureId: Slug.nullable() }),
   // Effects, scenes or cues of a room were created, edited or deleted.
-  z.object({ type: z.literal('effects.changed'), roomId: z.number() }),
-  z.object({ type: z.literal('scenes.changed'), roomId: z.number() }),
-  z.object({ type: z.literal('cues.changed'), roomId: z.number() }),
+  z.object({ type: z.literal('effects.changed'), roomId: Slug }),
+  z.object({ type: z.literal('scenes.changed'), roomId: Slug }),
+  z.object({ type: z.literal('cues.changed'), roomId: Slug }),
   // What the cue list is playing; sent on every cue, fade end and overlay change.
   z.object({ type: z.literal('playback.state'), state: PlaybackState }),
 ])

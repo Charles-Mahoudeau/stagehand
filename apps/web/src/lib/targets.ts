@@ -10,23 +10,23 @@ export type Target = InferResponseType<
 >[number]
 export type AimResult = InferResponseType<(typeof api.rooms)[':roomId']['aim']['$post'], 200>
 
-export const targetsQuery = (roomId: number) =>
+export const targetsQuery = (roomId: string) =>
   queryOptions({
     queryKey: ['rooms', roomId, 'targets'],
     queryFn: async () => {
-      const res = await api.rooms[':roomId'].targets.$get({ param: { roomId: String(roomId) } })
+      const res = await api.rooms[':roomId'].targets.$get({ param: { roomId: roomId } })
       if (!res.ok) throw await failure(res)
       return res.json()
     },
   })
 
-export function useTargetMutations(roomId: number) {
+export function useTargetMutations(roomId: string) {
   const queryClient = useQueryClient()
   const { queryKey } = targetsQuery(roomId)
-  const param = (id: number) => ({ roomId: String(roomId), targetId: String(id) })
-  const position = (id: number, fixtureId: number) => ({
+  const param = (id: string) => ({ roomId: roomId, targetId: id })
+  const position = (id: string, fixtureId: string) => ({
     ...param(id),
-    fixtureId: String(fixtureId),
+    fixtureId,
   })
   // Writes the server's copy straight into the cache so the list doesn't
   // lag behind while it refetches.
@@ -41,7 +41,7 @@ export function useTargetMutations(roomId: number) {
     create: useMutation({
       mutationFn: async (json: { name: string }) => {
         const res = await api.rooms[':roomId'].targets.$post({
-          param: { roomId: String(roomId) },
+          param: { roomId: roomId },
           json,
         })
         if (!res.ok) throw await failure(res)
@@ -50,21 +50,24 @@ export function useTargetMutations(roomId: number) {
       onSuccess: store,
     }),
     update: useMutation({
+      // `newId` changes the target's ID, which scenes refer to it by.
       mutationFn: async ({
         id,
-        ...json
-      }: { id: number } & Partial<{ name: string; slug: string }>) => {
+        newId,
+        name,
+      }: { id: string } & Partial<{ name: string; newId: string }>) => {
         const res = await api.rooms[':roomId'].targets[':targetId'].$patch({
           param: param(id),
-          json,
+          json: { name, id: newId },
         })
         if (!res.ok) throw await failure(res)
         return res.json()
       },
-      onSuccess: store,
+      onSuccess: (target, { id }) =>
+        queryClient.setQueryData(queryKey, (list) => list?.map((t) => (t.id === id ? target : t))),
     }),
     remove: useMutation({
-      mutationFn: async (id: number) => {
+      mutationFn: async (id: string) => {
         const res = await api.rooms[':roomId'].targets[':targetId'].$delete({ param: param(id) })
         if (!res.ok) throw await failure(res)
       },
@@ -77,7 +80,7 @@ export function useTargetMutations(roomId: number) {
         id,
         fixtureId,
         ...json
-      }: { id: number; fixtureId: number } & PanTilt) => {
+      }: { id: string; fixtureId: string } & PanTilt) => {
         const res = await api.rooms[':roomId'].targets[':targetId'].positions[':fixtureId'].$put({
           param: position(id, fixtureId),
           json,
@@ -88,7 +91,7 @@ export function useTargetMutations(roomId: number) {
       onSuccess: store,
     }),
     clearPosition: useMutation({
-      mutationFn: async ({ id, fixtureId }: { id: number; fixtureId: number }) => {
+      mutationFn: async ({ id, fixtureId }: { id: string; fixtureId: string }) => {
         const res = await api.rooms[':roomId'].targets[':targetId'].positions[':fixtureId'].$delete(
           { param: position(id, fixtureId) },
         )
@@ -102,9 +105,9 @@ export function useTargetMutations(roomId: number) {
 
 // Sends heads to a target. Heads with nothing stored for it come back in
 // `skipped`.
-export async function aim(roomId: number, fixtureIds: number[], targetId: number) {
+export async function aim(roomId: string, fixtureIds: string[], targetId: string) {
   const res = await api.rooms[':roomId'].aim.$post({
-    param: { roomId: String(roomId) },
+    param: { roomId: roomId },
     json: { fixtureIds, targetId },
   })
   if (!res.ok) throw await failure(res)

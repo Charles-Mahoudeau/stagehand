@@ -32,11 +32,11 @@ export const roomsQuery = queryOptions({
   },
 })
 
-export const fixturesQuery = (roomId: number) =>
+export const fixturesQuery = (roomId: string) =>
   queryOptions({
     queryKey: ['rooms', roomId, 'fixtures'],
     queryFn: async () => {
-      const res = await api.rooms[':roomId'].fixtures.$get({ param: { roomId: String(roomId) } })
+      const res = await api.rooms[':roomId'].fixtures.$get({ param: { roomId: roomId } })
       if (!res.ok) throw await failure(res)
       return res.json()
     },
@@ -45,7 +45,7 @@ export const fixturesQuery = (roomId: number) =>
 export function useRoomMutations() {
   const queryClient = useQueryClient()
   const onSuccess = () => queryClient.invalidateQueries({ queryKey: ['rooms'] })
-  const param = (id: number) => ({ roomId: String(id) })
+  const param = (id: string) => ({ roomId: id })
 
   return {
     create: useMutation({
@@ -57,7 +57,7 @@ export function useRoomMutations() {
       onSuccess,
     }),
     rename: useMutation({
-      mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      mutationFn: async ({ id, name }: { id: string; name: string }) => {
         const res = await api.rooms[':roomId'].$patch({ param: param(id), json: { name } })
         if (!res.ok) throw await failure(res)
         return res.json()
@@ -69,7 +69,7 @@ export function useRoomMutations() {
       mutationFn: async ({
         id,
         ...json
-      }: { id: number } & Partial<{ width: number | null; depth: number | null }>) => {
+      }: { id: string } & Partial<{ width: number | null; depth: number | null }>) => {
         const res = await api.rooms[':roomId'].$patch({ param: param(id), json })
         if (!res.ok) throw await failure(res)
         return res.json()
@@ -77,14 +77,14 @@ export function useRoomMutations() {
       onSuccess,
     }),
     remove: useMutation({
-      mutationFn: async (id: number) => {
+      mutationFn: async (id: string) => {
         const res = await api.rooms[':roomId'].$delete({ param: param(id) })
         if (!res.ok) throw await failure(res)
       },
       onSuccess,
     }),
     activate: useMutation({
-      mutationFn: async (id: number) => {
+      mutationFn: async (id: string) => {
         const res = await api.rooms[':roomId'].activate.$post({ param: param(id) })
         if (!res.ok) throw await failure(res)
         return res.json()
@@ -94,10 +94,10 @@ export function useRoomMutations() {
   }
 }
 
-export function useFixtureMutations(roomId: number) {
+export function useFixtureMutations(roomId: string) {
   const queryClient = useQueryClient()
   const { queryKey } = fixturesQuery(roomId)
-  const param = (id: number) => ({ roomId: String(roomId), fixtureId: String(id) })
+  const param = (id: string) => ({ roomId: roomId, fixtureId: id })
   // Writes the server's copy straight into the cache, so a dragged fixture
   // doesn't jump back while the list refetches.
   const store = (fixture: Fixture) =>
@@ -111,7 +111,7 @@ export function useFixtureMutations(roomId: number) {
     create: useMutation({
       mutationFn: async (json: FixtureInput) => {
         const res = await api.rooms[':roomId'].fixtures.$post({
-          param: { roomId: String(roomId) },
+          param: { roomId: roomId },
           json,
         })
         if (!res.ok) throw await failure(res)
@@ -120,7 +120,7 @@ export function useFixtureMutations(roomId: number) {
       onSuccess: store,
     }),
     update: useMutation({
-      mutationFn: async ({ id, ...json }: Partial<FixtureInput> & { id: number }) => {
+      mutationFn: async ({ id, ...json }: Partial<FixtureInput> & { id: string }) => {
         const res = await api.rooms[':roomId'].fixtures[':fixtureId'].$patch({
           param: param(id),
           json,
@@ -131,7 +131,7 @@ export function useFixtureMutations(roomId: number) {
       onSuccess: store,
     }),
     remove: useMutation({
-      mutationFn: async (id: number) => {
+      mutationFn: async (id: string) => {
         const res = await api.rooms[':roomId'].fixtures[':fixtureId'].$delete({ param: param(id) })
         if (!res.ok) throw await failure(res)
       },
@@ -141,14 +141,14 @@ export function useFixtureMutations(roomId: number) {
   }
 }
 
-export async function startIdentify(roomId: number, fixtureId: number) {
-  const param = { roomId: String(roomId), fixtureId: String(fixtureId) }
+export async function startIdentify(roomId: string, fixtureId: string) {
+  const param = { roomId: roomId, fixtureId: fixtureId }
   const res = await api.rooms[':roomId'].fixtures[':fixtureId'].identify.$post({ param })
   if (!res.ok) throw await failure(res)
 }
 
-export async function stopIdentify(roomId: number, fixtureId: number) {
-  const param = { roomId: String(roomId), fixtureId: String(fixtureId) }
+export async function stopIdentify(roomId: string, fixtureId: string) {
+  const param = { roomId: roomId, fixtureId: fixtureId }
   await api.rooms[':roomId'].fixtures[':fixtureId'].identify.$delete({ param })
 }
 

@@ -12,7 +12,7 @@ const WHEEL_SLOTS = [0, 16, 32, 48, 64, 80, 96, 112]
 const WIGGLE_PERIOD_MS = 1000
 const WIGGLE_AMPLITUDE = 6
 
-export type IdentifyTarget = { id: number; type: FixtureType; address: number }
+export type IdentifyTarget = { id: string; type: FixtureType; address: number }
 
 // Runs a rainbow on one fixture's channels so it can be found in the room.
 // Every fixture sharing the address lights too, since they get the same data.
@@ -51,7 +51,7 @@ class Identify {
   }
 
   // Stops if `fixtureId` is the one identifying, before it is changed or removed.
-  stopFor(fixtureId: number) {
+  stopFor(fixtureId: string) {
     if (this.target?.id === fixtureId) this.stop()
   }
 

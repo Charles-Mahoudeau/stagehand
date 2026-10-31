@@ -1,4 +1,4 @@
-import { panDegrees, tiltDegrees } from '@stagehand/shared'
+import { panDegrees, slugify, tiltDegrees } from '@stagehand/shared'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { cn } from 'cn'
@@ -100,7 +100,7 @@ export function TargetsWorkspace({ room, fixtures, onSelect }: ViewProps) {
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate">{t.name}</span>
                   <span className="truncate font-mono text-[10px] text-muted-foreground">
-                    {t.slug}
+                    {t.id}
                   </span>
                 </span>
                 <span
@@ -192,7 +192,7 @@ export function TargetsWorkspace({ room, fixtures, onSelect }: ViewProps) {
         <PanelHeader>
           <PanelTitle>Inspector</PanelTitle>
           <Spacer />
-          {selected && <PanelNote>target · {selected.slug}</PanelNote>}
+          {selected && <PanelNote>target · {selected.id}</PanelNote>}
         </PanelHeader>
         {selected ? (
           <TargetInspector
@@ -201,6 +201,7 @@ export function TargetsWorkspace({ room, fixtures, onSelect }: ViewProps) {
             target={selected}
             head={head}
             onRemoved={() => set({ target: undefined })}
+            onRenamed={(id) => set({ target: id })}
           />
         ) : (
           <PanelBody className="p-3 text-xs text-muted-foreground">
@@ -254,9 +255,9 @@ function CalibrationTable({
 }: {
   targets: Target[]
   heads: Fixture[]
-  selectedTarget?: number
-  selectedHead?: number
-  onPick: (target: number, head: number) => void
+  selectedTarget?: string
+  selectedHead?: string
+  onPick: (target: string, head: string) => void
 }) {
   if (targets.length === 0 || heads.length === 0) {
     return (
@@ -310,13 +311,6 @@ function CalibrationTable({
   )
 }
 
-// Lower-case letters, digits and single dashes, as the server requires.
-const toSlug = (text: string) =>
-  text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-
 function nextTargetName(targets: Target[]) {
   const names = new Set(targets.map((t) => t.name.toLowerCase()))
   for (let n = targets.length + 1; ; n++) if (!names.has(`target ${n}`)) return `Target ${n}`
@@ -327,17 +321,19 @@ function TargetInspector({
   target,
   head,
   onRemoved,
+  onRenamed,
 }: {
   room: Room
   target: Target
   head?: Fixture
   onRemoved: () => void
+  onRenamed: (id: string) => void
 }) {
   const { dmx } = useLive()
   const { update, remove, setPosition, clearPosition } = useTargetMutations(room.id)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const send = useMutation({
-    mutationFn: (fixtureId: number) => aim(room.id, [fixtureId], target.id),
+    mutationFn: (fixtureId: string) => aim(room.id, [fixtureId], target.id),
   })
   const error = [update, remove, setPosition, clearPosition, send]
     .map((m) => m.error?.message)
@@ -360,10 +356,12 @@ function TargetInspector({
           <CommitInput
             compact
             id="target-id"
-            value={target.slug}
+            value={target.id}
             onCommit={(text) => {
-              const slug = toSlug(text)
-              if (slug && slug !== target.slug) update.mutate({ id: target.id, slug })
+              const newId = slugify(text)
+              if (newId && newId !== target.id) {
+                update.mutate({ id: target.id, newId }, { onSuccess: (t) => onRenamed(t.id) })
+              }
             }}
             maxLength={40}
             spellCheck={false}

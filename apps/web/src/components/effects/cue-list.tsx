@@ -13,7 +13,7 @@ export function CueList({
   cues,
   scenes,
 }: {
-  roomId: number
+  roomId: string
   cues: Cue[]
   scenes: Scene[]
 }) {
@@ -85,7 +85,7 @@ export function CueList({
               <select
                 aria-label={`Cue ${i + 1} scene`}
                 value={c.sceneId}
-                onChange={(e) => m.update.mutate({ id: c.id, sceneId: Number(e.target.value) })}
+                onChange={(e) => m.update.mutate({ id: c.id, sceneId: e.target.value })}
                 className="h-6 min-w-0 flex-1 rounded bg-surface-3 px-1.5 text-[11px] text-foreground outline-none"
               >
                 {scenes.map((s) => (

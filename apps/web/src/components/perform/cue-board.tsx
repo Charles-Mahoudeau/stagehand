@@ -38,7 +38,7 @@ export function CueBoard({ room }: { room: Room }) {
   const current = list.findIndex((c) => c.id === playback?.cueId)
   const next = list[current + 1]
   const pads = (effects.data ?? []).filter((e) => e.pad)
-  const sceneName = (id: number) => scenes.data?.find((s) => s.id === id)?.name ?? ''
+  const sceneName = (id: string) => scenes.data?.find((s) => s.id === id)?.name ?? ''
   const error =
     transport.go.error ??
     transport.back.error ??

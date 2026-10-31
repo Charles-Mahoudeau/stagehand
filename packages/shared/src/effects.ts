@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { Slug } from './ids'
 
 // Effect types and their parameters. An effect is one generator (what the
 // light does over time) plus a set of parameters; the generators themselves
@@ -493,8 +494,8 @@ export function defaultParams(generator: Generator): ParamsInput {
 }
 
 export const EffectSchema = z.object({
-  id: z.number().int(),
-  roomId: z.number().int(),
+  id: Slug,
+  roomId: Slug,
   name: z.string(),
   generator: Generator,
   params: ParamsSchema,

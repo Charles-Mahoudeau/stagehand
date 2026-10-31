@@ -9,7 +9,7 @@ import { type Room, useRoomMutations } from '@/lib/rooms'
 type Props = {
   rooms: Room[]
   room: Room | undefined
-  onSelect: (id: number) => void
+  onSelect: (id: string) => void
 }
 
 // Header room switcher. Picking a room opens it for editing; only the active

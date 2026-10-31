@@ -7,9 +7,9 @@ export type ViewProps = {
   room: Room
   fixtures: Fixture[]
   selected?: Fixture
-  onSelect: (id: number | null) => void
+  onSelect: (id: string | null) => void
   // Fixtures whose channels collide with another's.
-  overlapping: Set<number>
+  overlapping: Set<string>
 }
 
 // Adds a fixture with sensible defaults (next free address, middle of the
