@@ -33,7 +33,7 @@ const RoomInputSchema = z
   .openapi('RoomInput')
 
 const RoomUpdateSchema = z
-  .object({ name: NameSchema, width: SizeSchema, depth: SizeSchema })
+  .object({ name: NameSchema, id: idSchema('wakanda'), width: SizeSchema, depth: SizeSchema })
   .partial()
   .openapi('RoomUpdate')
 
@@ -85,7 +85,7 @@ const renameRoom = createRoute({
   responses: {
     200: json('Room updated', RoomSchema),
     404: errorResponse('No such room'),
-    409: errorResponse('Name already used'),
+    409: errorResponse('Name or ID already used'),
   },
 })
 
@@ -160,9 +160,14 @@ export const roomRoutes = createRouter()
     if (changes.name !== undefined && nameTaken(changes.name, roomId)) {
       return c.json({ error: `A room named "${changes.name}" exists` }, 409)
     }
+    if (changes.id !== undefined && changes.id !== roomId && findRoom(changes.id)) {
+      return c.json({ error: `A room with ID "${changes.id}" exists` }, 409)
+    }
     // Drizzle rejects an empty SET, so an empty body is a no-op.
     if (Object.keys(changes).length === 0) return c.json(old, 200)
+    // Everything in the room follows an ID change through ON UPDATE CASCADE.
     const room = db.update(rooms).set(changes).where(eq(rooms.id, roomId)).returning().get()
+    if (changes.id !== undefined) playback.invalidate()
     broadcast({ type: 'rooms.changed' })
     return c.json(room, 200)
   })

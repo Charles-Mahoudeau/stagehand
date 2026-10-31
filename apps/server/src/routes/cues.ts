@@ -27,6 +27,7 @@ const CueCreateSchema = z
 const CueUpdateSchema = z
   .object({
     sceneId: Slug,
+    id: idSchema('night-falls'),
     name: NameSchema,
     fade: z.number().min(0).max(120).nullable(),
     trigger: z.enum(CUE_TRIGGERS),
@@ -77,7 +78,11 @@ const updateCue = createRoute({
     params: CueParams,
     body: { required: true, content: { 'application/json': { schema: CueUpdateSchema } } },
   },
-  responses: { 200: json('Cue updated', CueSchema), 404: errorResponse('No such cue or scene') },
+  responses: {
+    200: json('Cue updated', CueSchema),
+    404: errorResponse('No such cue or scene'),
+    409: errorResponse('ID already used in this room'),
+  },
 })
 
 const removeCue = createRoute({
@@ -237,6 +242,9 @@ export const cueRoutes = createRouter()
     if (input.sceneId !== undefined && !findScene(roomId, input.sceneId)) {
       return c.json({ error: 'Scene not found' }, 404)
     }
+    if (input.id !== undefined && input.id !== cueId && find(roomId, input.id)) {
+      return c.json({ error: `A cue with ID "${input.id}" exists in this room` }, 409)
+    }
     if (Object.keys(input).length === 0) return c.json(old, 200)
     const row = db
       .update(cues)
@@ -244,6 +252,7 @@ export const cueRoutes = createRouter()
       .where(and(eq(cues.roomId, roomId), eq(cues.id, cueId)))
       .returning()
       .get()
+    if (input.id !== undefined && input.id !== cueId) playback.rename('cue', cueId, input.id)
     changed(roomId)
     return c.json(row, 200)
   })

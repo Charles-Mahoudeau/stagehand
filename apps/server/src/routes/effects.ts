@@ -28,6 +28,7 @@ const EffectCreateSchema = z
 const EffectUpdateSchema = z
   .object({
     name: NameSchema,
+    id: idSchema('fireplace'),
     params: ParamsSchema.openapi({ description: 'Merged into the stored parameters' }),
     pad: z.boolean(),
   })
@@ -79,7 +80,7 @@ const updateEffect = createRoute({
   responses: {
     200: json('Effect updated', EffectSchema),
     404: errorResponse('No such effect'),
-    409: errorResponse('Name already used in this room'),
+    409: errorResponse('Name or ID already used in this room'),
   },
 })
 
@@ -185,14 +186,38 @@ export const effectRoutes = createRouter()
     if (input.name !== undefined && nameTaken(roomId, input.name, effectId)) {
       return c.json(nameConflict(input.name), 409)
     }
+    if (input.id !== undefined && input.id !== effectId && find(roomId, input.id)) {
+      return c.json({ error: `An effect with ID "${input.id}" exists in this room` }, 409)
+    }
     const set = { ...input, ...(params ? { params: { ...old.params, ...params } } : {}) }
     if (Object.keys(set).length === 0) return c.json(old, 200)
-    const row = db
-      .update(effects)
-      .set(set)
-      .where(and(eq(effects.roomId, roomId), eq(effects.id, effectId)))
-      .returning()
-      .get()
+    // Scenes hold effect IDs in JSON, so they are rewritten by hand.
+    const row = db.transaction((tx) => {
+      const updated = tx
+        .update(effects)
+        .set(set)
+        .where(and(eq(effects.roomId, roomId), eq(effects.id, effectId)))
+        .returning()
+        .get()
+      if (set.id !== undefined && set.id !== effectId) {
+        for (const s of tx.select().from(scenes).where(eq(scenes.roomId, roomId)).all()) {
+          if (!s.effects.some((e) => e.effectId === effectId)) continue
+          tx.update(scenes)
+            .set({
+              effects: s.effects.map((e) =>
+                e.effectId === effectId ? { ...e, effectId: set.id as string } : e,
+              ),
+            })
+            .where(and(eq(scenes.roomId, roomId), eq(scenes.id, s.id)))
+            .run()
+        }
+      }
+      return updated
+    })
+    if (set.id !== undefined && set.id !== effectId) {
+      playback.rename('effect', effectId, set.id)
+      broadcast({ type: 'scenes.changed', roomId })
+    }
     changed(roomId)
     return c.json(row, 200)
   })

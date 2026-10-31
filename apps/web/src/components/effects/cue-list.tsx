@@ -1,6 +1,7 @@
 import { cn } from 'cn'
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react'
 import { CommitInput } from '@/components/configure/commit-input'
+import { IdInput } from '@/components/configure/id-input'
 import { Button } from '@/components/ui/button'
 import { useLive } from '@/lib/live'
 import { type Cue, type Scene, useCueMutations } from '@/lib/show'
@@ -80,6 +81,14 @@ export function CueList({
               >
                 <Trash2 />
               </Button>
+            </div>
+            <div className="pl-6">
+              <IdInput
+                aria-label={`Cue ${i + 1} ID`}
+                className="bg-surface-3 text-[11px]"
+                value={c.id}
+                onCommit={(newId) => m.update.mutate({ id: c.id, newId })}
+              />
             </div>
             <div className="flex items-center gap-1.5 pl-6 text-[11px] text-muted-foreground">
               <select

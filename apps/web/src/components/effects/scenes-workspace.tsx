@@ -4,6 +4,7 @@ import { cn } from 'cn'
 import { Play, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CommitInput } from '@/components/configure/commit-input'
+import { IdInput } from '@/components/configure/id-input'
 import {
   Field,
   Panel,
@@ -161,7 +162,12 @@ export function ScenesWorkspace({ room, fixtures, selectedId, onSelect }: Props)
               groups={groups}
               targets={targets.data ?? []}
               effects={effects.data ?? []}
-              update={(patch) => m.update.mutate({ id: selected.id, ...patch })}
+              update={(patch) =>
+                m.update.mutate(
+                  { id: selected.id, ...patch },
+                  { onSuccess: (s) => s.id !== selected.id && onSelect(s.id) },
+                )
+              }
               error={m.update.error ?? m.go.error}
             />
           ) : (
@@ -214,7 +220,9 @@ function Inspector({
   groups: ReturnType<typeof groupChoices>
   targets: Target[]
   effects: { id: string; name: string }[]
-  update: (patch: Partial<Pick<Scene, 'name' | 'tag' | 'look' | 'effects' | 'fade'>>) => void
+  update: (
+    patch: Partial<Pick<Scene, 'name' | 'tag' | 'look' | 'effects' | 'fade'>> & { newId?: string },
+  ) => void
   error: Error | null
 }) {
   // The look is edited here and streamed to the server, which replaces it whole.
@@ -256,6 +264,7 @@ function Inspector({
           value={scene.name}
           onCommit={(name) => update({ name })}
         />
+        <IdInput value={scene.id} onCommit={(newId) => update({ newId })} />
         <CommitInput
           compact
           aria-label="Tag"

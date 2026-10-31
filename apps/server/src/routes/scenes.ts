@@ -26,6 +26,7 @@ const SceneCreateSchema = z
 const SceneUpdateSchema = z
   .object({
     name: NameSchema,
+    id: idSchema('night'),
     tag: z.string().trim().max(24),
     look: Look.openapi({ description: 'Replaces the whole look' }),
     effects: z.array(SceneEffectRef).openapi({ description: 'Replaces the list of effects' }),
@@ -81,7 +82,7 @@ const updateScene = createRoute({
     200: json('Scene updated', SceneSchema),
     400: errorResponse('An effect is not in this room'),
     404: errorResponse('No such scene'),
-    409: errorResponse('Name already used in this room'),
+    409: errorResponse('Name or ID already used in this room'),
   },
 })
 
@@ -191,6 +192,9 @@ export const sceneRoutes = createRouter()
     if (input.name !== undefined && nameTaken(roomId, input.name, sceneId)) {
       return c.json(nameConflict(input.name), 409)
     }
+    if (input.id !== undefined && input.id !== sceneId && find(roomId, input.id)) {
+      return c.json({ error: `A scene with ID "${input.id}" exists in this room` }, 409)
+    }
     if (input.effects && !effectsExist(roomId, input.effects)) {
       return c.json({ error: 'An effect is not in this room' }, 400)
     }
@@ -201,6 +205,10 @@ export const sceneRoutes = createRouter()
       .where(and(eq(scenes.roomId, roomId), eq(scenes.id, sceneId)))
       .returning()
       .get()
+    if (input.id !== undefined && input.id !== sceneId) {
+      playback.rename('scene', sceneId, input.id)
+      broadcast({ type: 'cues.changed', roomId })
+    }
     changed(roomId)
     return c.json(row, 200)
   })

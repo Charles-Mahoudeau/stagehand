@@ -11,6 +11,7 @@ import { cn } from 'cn'
 import { Play, Plus, Square, Trash2, Zap } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { CommitInput } from '@/components/configure/commit-input'
+import { IdInput } from '@/components/configure/id-input'
 import { StagePlan } from '@/components/configure/stage-plan'
 import {
   Panel,
@@ -168,6 +169,9 @@ export function EffectsWorkspace({ room, fixtures, selectedId, onSelect }: Props
               groups={groups}
               targets={targets.data ?? []}
               onRename={(name) => m.update.mutate({ id: selected.id, name })}
+              onRenameId={(newId) =>
+                m.update.mutate({ id: selected.id, newId }, { onSuccess: (e) => onSelect(e.id) })
+              }
               onPad={(pad) => m.update.mutate({ id: selected.id, pad })}
               onParams={(params) => m.update.mutate({ id: selected.id, params })}
             />
@@ -263,6 +267,7 @@ function Inspector({
   groups,
   targets,
   onRename,
+  onRenameId,
   onPad,
   onParams,
 }: {
@@ -271,6 +276,7 @@ function Inspector({
   groups: GroupChoice[]
   targets: Parameters<typeof ParamsForm>[0]['targets']
   onRename: (name: string) => void
+  onRenameId: (id: string) => void
   onPad: (pad: boolean) => void
   onParams: (patch: ParamsInput) => void
 }) {
@@ -284,6 +290,7 @@ function Inspector({
           value={effect.name}
           onCommit={onRename}
         />
+        <IdInput value={effect.id} onCommit={onRenameId} />
         <p className="text-xs text-muted-foreground">{description}</p>
         <label className="flex items-center gap-2 text-xs">
           <input

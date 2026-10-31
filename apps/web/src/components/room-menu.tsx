@@ -1,3 +1,4 @@
+import { slugify } from '@stagehand/shared'
 import { cn } from 'cn'
 import { ChevronDown } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
@@ -84,10 +85,11 @@ export function RoomMenu({ rooms, room, onSelect }: Props) {
           <RoomNameForm
             label={form === 'new' ? 'New room name' : `Rename ${room?.name}`}
             initial={form === 'rename' ? (room?.name ?? '') : ''}
+            initialId={form === 'rename' ? room?.id : undefined}
             submit={form === 'new' ? 'Create' : 'Rename'}
             pending={mutations.create.isPending || mutations.rename.isPending}
             onCancel={reset}
-            onSubmit={(name) => {
+            onSubmit={(name, id) => {
               if (form === 'new') {
                 mutations.create.mutate(name, {
                   onSuccess: (created) => {
@@ -96,7 +98,15 @@ export function RoomMenu({ rooms, room, onSelect }: Props) {
                   },
                 })
               } else if (room) {
-                mutations.rename.mutate({ id: room.id, name }, { onSuccess: reset })
+                mutations.rename.mutate(
+                  { id: room.id, name, newId: id !== room.id ? id : undefined },
+                  {
+                    onSuccess: (renamed) => {
+                      if (renamed.id !== room.id) onSelect(renamed.id)
+                      reset()
+                    },
+                  },
+                )
               }
             }}
           />
@@ -155,15 +165,19 @@ function MenuAction({ className, ...props }: React.ComponentProps<typeof Button>
 function RoomNameForm(props: {
   label: string
   initial: string
+  // Set when renaming: the ID can be edited too.
+  initialId?: string
   submit: string
   pending: boolean
-  onSubmit: (name: string) => void
+  onSubmit: (name: string, id: string) => void
   onCancel: () => void
 }) {
   const [name, setName] = useState(props.initial)
+  const [id, setId] = useState(props.initialId ?? '')
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (name.trim()) props.onSubmit(name.trim())
+    const slug = slugify(id)
+    if (name.trim() && (props.initialId === undefined || slug)) props.onSubmit(name.trim(), slug)
   }
   return (
     <form className="flex flex-col gap-2 p-1.5" onSubmit={submit}>
@@ -179,6 +193,17 @@ function RoomNameForm(props: {
           props.onCancel()
         }}
       />
+      {props.initialId !== undefined && (
+        <Input
+          aria-label="ID"
+          placeholder="ID"
+          maxLength={40}
+          spellCheck={false}
+          className="font-mono"
+          value={id}
+          onChange={(e) => setId(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-'))}
+        />
+      )}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={props.onCancel}>
           Cancel

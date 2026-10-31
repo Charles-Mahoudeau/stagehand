@@ -49,7 +49,7 @@ export const fixtures = sqliteTable(
     id: text('id').notNull(),
     roomId: text('room_id')
       .notNull()
-      .references(() => rooms.id, { onDelete: 'cascade' }),
+      .references(() => rooms.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
     name: text('name').notNull(),
     type: text('type', { enum: FIXTURE_TYPES }).notNull(),
     address: integer('address').notNull(),
@@ -74,7 +74,7 @@ export const targets = sqliteTable(
     id: text('id').notNull(),
     roomId: text('room_id')
       .notNull()
-      .references(() => rooms.id, { onDelete: 'cascade' }),
+      .references(() => rooms.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
     name: text('name').notNull(),
   },
   (t) => [primaryKey({ columns: [t.roomId, t.id] })],
@@ -99,7 +99,9 @@ export const targetPositions = sqliteTable(
     foreignKey({
       columns: [t.roomId, t.fixtureId],
       foreignColumns: [fixtures.roomId, fixtures.id],
-    }).onDelete('cascade'),
+    })
+      .onUpdate('cascade')
+      .onDelete('cascade'),
   ],
 )
 
@@ -111,7 +113,7 @@ export const effects = sqliteTable(
     id: text('id').notNull(),
     roomId: text('room_id')
       .notNull()
-      .references(() => rooms.id, { onDelete: 'cascade' }),
+      .references(() => rooms.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
     name: text('name').notNull(),
     generator: text('generator', { enum: GENERATORS }).notNull(),
     params: text('params', { mode: 'json' }).$type<ParamsInput>().notNull(),
@@ -131,7 +133,7 @@ export const scenes = sqliteTable(
     id: text('id').notNull(),
     roomId: text('room_id')
       .notNull()
-      .references(() => rooms.id, { onDelete: 'cascade' }),
+      .references(() => rooms.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
     name: text('name').notNull(),
     tag: text('tag').notNull().default(''),
     look: text('look', { mode: 'json' }).$type<Look>().notNull(),
@@ -151,7 +153,7 @@ export const cues = sqliteTable(
     id: text('id').notNull(),
     roomId: text('room_id')
       .notNull()
-      .references(() => rooms.id, { onDelete: 'cascade' }),
+      .references(() => rooms.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
     position: integer('position').notNull(),
     name: text('name').notNull(),
     sceneId: text('scene_id').notNull(),
@@ -164,7 +166,9 @@ export const cues = sqliteTable(
     foreignKey({
       columns: [t.roomId, t.sceneId],
       foreignColumns: [scenes.roomId, scenes.id],
-    }).onDelete('cascade'),
+    })
+      .onUpdate('cascade')
+      .onDelete('cascade'),
     index('cues_room_position').on(t.roomId, t.position),
   ],
 )

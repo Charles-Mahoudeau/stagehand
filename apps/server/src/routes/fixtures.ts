@@ -7,6 +7,7 @@ import { DMX_CHANNELS, dmxOutput } from '../dmx'
 import { identify } from '../identify'
 import { createRouter } from '../lib/router'
 import { errorResponse, idParam, idSchema, jsonResponse as json } from '../lib/schemas'
+import { playback } from '../playback'
 import { broadcast } from '../ws'
 import { findRoom, RoomParams } from './rooms'
 
@@ -66,6 +67,7 @@ const FixtureCreateSchema = z
 const FixtureUpdateSchema = z
   .object({
     name: NameSchema,
+    id: idSchema('l1'),
     type: TypeSchema,
     address: AddressSchema,
     position: PositionSchema.nullable(),
@@ -145,7 +147,7 @@ const updateFixture = createRoute({
     200: json('Fixture updated', FixtureSchema),
     400: errorResponse('Fixture would extend past the last channel'),
     404: errorResponse('No such fixture'),
-    409: errorResponse('Name already used in this room'),
+    409: errorResponse('Name or ID already used in this room'),
   },
 })
 
@@ -283,6 +285,9 @@ export const fixtureRoutes = createRouter()
     if (input.name !== undefined && nameTaken(roomId, input.name, fixtureId)) {
       return c.json(nameConflict(input.name), 409)
     }
+    if (input.id !== undefined && input.id !== fixtureId && findFixture(roomId, input.id)) {
+      return c.json({ error: `A fixture with ID "${input.id}" exists in this room` }, 409)
+    }
     const type = input.type ?? old.type
     const address = input.address ?? old.address
     if (!fitsUniverse(type, address)) {
@@ -299,6 +304,7 @@ export const fixtureRoutes = createRouter()
       .where(and(eq(fixtures.roomId, roomId), eq(fixtures.id, fixtureId)))
       .returning()
       .get()
+    if (input.id !== undefined) playback.invalidate()
     if (type !== old.type || address !== old.address) releaseChannels(roomId, old)
     broadcast({ type: 'fixtures.changed', roomId })
     return c.json(toFixture(row), 200)

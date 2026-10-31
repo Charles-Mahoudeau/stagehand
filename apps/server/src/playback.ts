@@ -93,6 +93,19 @@ class Playback {
     this.dirty = true
   }
 
+  // Follows an ID edit so what is running keeps running under its new ID.
+  rename(kind: 'cue' | 'scene' | 'effect', from: string, to: string) {
+    if (kind === 'cue' && this.cueId === from) this.cueId = to
+    if (kind === 'scene' && this.scene?.sceneId === from) this.scene.sceneId = to
+    if (kind === 'effect') {
+      for (const o of [...this.overlays, ...(this.scene?.instances ?? [])]) {
+        if (o.effectId === from) o.effectId = to
+      }
+    }
+    this.dirty = true
+    if (this.timer) this.broadcastState()
+  }
+
   state(): PlaybackState {
     const t = now()
     return {

@@ -43,6 +43,13 @@
       "when": 1793464374988,
       "tag": "0005_text_ids",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793464719686,
+      "tag": "0006_editable_ids",
+      "breakpoints": true
     }
   ]
 }

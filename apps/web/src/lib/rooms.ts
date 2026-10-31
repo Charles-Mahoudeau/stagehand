@@ -57,8 +57,12 @@ export function useRoomMutations() {
       onSuccess,
     }),
     rename: useMutation({
-      mutationFn: async ({ id, name }: { id: string; name: string }) => {
-        const res = await api.rooms[':roomId'].$patch({ param: param(id), json: { name } })
+      // `newId` changes the room's ID, which everything in it follows.
+      mutationFn: async ({ id, name, newId }: { id: string; name?: string; newId?: string }) => {
+        const res = await api.rooms[':roomId'].$patch({
+          param: param(id),
+          json: { name, id: newId },
+        })
         if (!res.ok) throw await failure(res)
         return res.json()
       },
@@ -120,15 +124,25 @@ export function useFixtureMutations(roomId: string) {
       onSuccess: store,
     }),
     update: useMutation({
-      mutationFn: async ({ id, ...json }: Partial<FixtureInput> & { id: string }) => {
+      // `newId` changes the fixture's ID.
+      mutationFn: async ({
+        id,
+        newId,
+        ...json
+      }: Partial<FixtureInput> & { id: string; newId?: string }) => {
         const res = await api.rooms[':roomId'].fixtures[':fixtureId'].$patch({
           param: param(id),
-          json,
+          json: { ...json, id: newId },
         })
         if (!res.ok) throw await failure(res)
         return res.json()
       },
-      onSuccess: store,
+      onSuccess: (fixture, { id }) => {
+        if (id === fixture.id) return store(fixture)
+        queryClient.setQueryData(queryKey, (list) => list?.map((f) => (f.id === id ? fixture : f)))
+        // Target positions refer to heads by ID.
+        void queryClient.invalidateQueries({ queryKey: ['rooms', roomId, 'targets'] })
+      },
     }),
     remove: useMutation({
       mutationFn: async (id: string) => {

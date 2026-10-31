@@ -72,16 +72,26 @@ export function useEffectMutations(roomId: string) {
     update: useMutation({
       mutationFn: async ({
         id,
+        newId,
         ...json
-      }: { id: string } & Partial<{ name: string; params: ParamsInput; pad: boolean }>) => {
+      }: { id: string; newId?: string } & Partial<{
+        name: string
+        params: ParamsInput
+        pad: boolean
+      }>) => {
         const res = await api.rooms[':roomId'].effects[':effectId'].$patch({
           param: param(id),
-          json,
+          json: { ...json, id: newId },
         })
         if (!res.ok) throw await failure(res)
         return res.json()
       },
-      onSuccess: store,
+      onSuccess: (effect, { id }) => {
+        if (id === effect.id) return store(effect)
+        queryClient.setQueryData(queryKey, (list) => list?.map((e) => (e.id === id ? effect : e)))
+        // Scenes refer to effects by ID.
+        void queryClient.invalidateQueries({ queryKey: ['rooms', roomId, 'scenes'] })
+      },
     }),
     remove: useMutation({
       mutationFn: async (id: string) => {
@@ -131,16 +141,22 @@ export function useSceneMutations(roomId: string) {
     update: useMutation({
       mutationFn: async ({
         id,
+        newId,
         ...json
-      }: { id: string } & Partial<Omit<Scene, 'id' | 'roomId'>>) => {
+      }: { id: string; newId?: string } & Partial<Omit<Scene, 'id' | 'roomId'>>) => {
         const res = await api.rooms[':roomId'].scenes[':sceneId'].$patch({
           param: param(id),
-          json,
+          json: { ...json, id: newId },
         })
         if (!res.ok) throw await failure(res)
         return res.json()
       },
-      onSuccess: store,
+      onSuccess: (scene, { id }) => {
+        if (id === scene.id) return store(scene)
+        queryClient.setQueryData(queryKey, (list) => list?.map((s) => (s.id === id ? scene : s)))
+        // Cues refer to scenes by ID.
+        void queryClient.invalidateQueries({ queryKey: ['rooms', roomId, 'cues'] })
+      },
     }),
     remove: useMutation({
       mutationFn: async (id: string) => {
@@ -179,9 +195,13 @@ export function useCueMutations(roomId: string) {
     update: useMutation({
       mutationFn: async ({
         id,
+        newId,
         ...json
-      }: { id: string } & Partial<Omit<Cue, 'id' | 'roomId' | 'position'>>) => {
-        const res = await api.rooms[':roomId'].cues[':cueId'].$patch({ param: param(id), json })
+      }: { id: string; newId?: string } & Partial<Omit<Cue, 'id' | 'roomId' | 'position'>>) => {
+        const res = await api.rooms[':roomId'].cues[':cueId'].$patch({
+          param: param(id),
+          json: { ...json, id: newId },
+        })
         if (!res.ok) throw await failure(res)
         return res.json()
       },

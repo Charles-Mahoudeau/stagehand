@@ -1,10 +1,11 @@
-import { panDegrees, slugify, tiltDegrees } from '@stagehand/shared'
+import { panDegrees, tiltDegrees } from '@stagehand/shared'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { cn } from 'cn'
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import { CommitInput } from '@/components/configure/commit-input'
+import { IdInput } from '@/components/configure/id-input'
 import type { ViewProps } from '@/components/configure/shared'
 import { StagePlan } from '@/components/configure/stage-plan'
 import {
@@ -353,19 +354,12 @@ function TargetInspector({
           />
         </Field>
         <Field label="ID" htmlFor="target-id">
-          <CommitInput
-            compact
+          <IdInput
             id="target-id"
             value={target.id}
-            onCommit={(text) => {
-              const newId = slugify(text)
-              if (newId && newId !== target.id) {
-                update.mutate({ id: target.id, newId }, { onSuccess: (t) => onRenamed(t.id) })
-              }
-            }}
-            maxLength={40}
-            spellCheck={false}
-            className="font-mono"
+            onCommit={(newId) =>
+              update.mutate({ id: target.id, newId }, { onSuccess: (t) => onRenamed(t.id) })
+            }
           />
         </Field>
       </Section>

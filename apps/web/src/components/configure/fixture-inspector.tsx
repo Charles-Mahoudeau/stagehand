@@ -17,6 +17,7 @@ import { channelCountLabel, outputColor, profileLabel, rangeLabel, typeLabel } f
 import { type Fixture, useFixtureMutations } from '@/lib/rooms'
 import { CommitInput } from './commit-input'
 import { Fader } from './fader'
+import { IdInput } from './id-input'
 import { IdentifyButton } from './identify-button'
 import { useAddFixture, type ViewProps } from './shared'
 
@@ -62,9 +63,9 @@ function Inspector(props: ViewProps & { fixture: Fixture }) {
   const error =
     invalid ?? update.error?.message ?? remove.error?.message ?? addFixture.error?.message
 
-  const save = (changes: Parameters<typeof update.mutate>[0]) => {
+  const save = (changes: Parameters<typeof update.mutate>[0], onSuccess?: () => void) => {
     setInvalid(null)
-    update.mutate(changes)
+    update.mutate(changes, { onSuccess })
   }
   const saveAddress = (text: string) => {
     const address = Number(text)
@@ -117,6 +118,13 @@ function Inspector(props: ViewProps & { fixture: Fixture }) {
             onCommit={(name) =>
               name ? save({ id: fixture.id, name }) : setInvalid('Name can’t be empty')
             }
+          />
+        </Field>
+        <Field label="ID" htmlFor="fixture-id">
+          <IdInput
+            id="fixture-id"
+            value={fixture.id}
+            onCommit={(newId) => save({ id: fixture.id, newId }, () => onSelect(newId))}
           />
         </Field>
         <Field label="Type">
